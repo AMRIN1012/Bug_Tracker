@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+{% block title %}Register{% endblock %}
+{% block page_title %}Sign Up{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center align-items-center" style="min-height: 80vh;">
+  <div class="col-md-7 col-lg-5">
+    <div class="card-custom shadow border-0" style="padding: 32px 24px;">
+      <div class="text-center mb-4">
+        <i class="bi bi-person-plus-fill text-primary" style="font-size: 2.5rem;"></i>
+        <h3 class="mt-2 font-weight-bold" style="letter-spacing: 0.5px;">Register Account</h3>
+        <p class="text-muted" style="font-size: 0.875rem;">Create a profile to collaborate and log bugs</p>
+      </div>
+
+      <form method="POST" action="{% url 'register' %}" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger p-2 border-0 mb-3" style="font-size: 0.85rem;">
+            {% for error in form.non_field_errors %}
+              {{ error }}
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        <div class="row">
+          <div class="col-md-12 mb-3">
+            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Full Name</label>
+            {{ form.full_name }}
+            {% if form.full_name.errors %}
+              <div class="text-danger mt-1" style="font-size: 0.775rem;">{{ form.full_name.errors.0 }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Username</label>
+            {{ form.username }}
+            {% if form.username.errors %}
+              <div class="text-danger mt-1" style="font-size: 0.775rem;">{{ form.username.errors.0 }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Email Address</label>
+            {{ form.email }}
+            {% if form.email.errors %}
+              <div class="text-danger mt-1" style="font-size: 0.775rem;">{{ form.email.errors.0 }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Password</label>
+            {{ form.password }}
+            {% if form.password.errors %}
+              <div class="text-danger mt-1" style="font-size: 0.775rem;">{{ form.password.errors.0 }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Confirm Password</label>
+            {{ form.confirm_password }}
+            {% if form.confirm_password.errors %}
+              <div class="text-danger mt-1" style="font-size: 0.775rem;">{{ form.confirm_password.errors.0 }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Role Selection</label>
+            {{ form.role }}
+            {% if form.role.errors %}
+              <div class="text-danger mt-1" style="font-size: 0.775rem;">{{ form.role.errors.0 }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-6 mb-4">
+            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Profile Photo</label>
+            {{ form.photo }}
+            {% if form.photo.errors %}
+              <div class="text-danger mt-1" style="font-size: 0.775rem;">{{ form.photo.errors.0 }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100 py-2.5 font-weight-semibold" style="border-radius: 8px; font-weight: 600;">
+          Create Account
+        </button>
+      </form>
+
+      <div class="mt-4 pt-2 border-top text-center" style="border-color: var(--border-color) !important; font-size: 0.85rem;">
+        <span class="text-muted">Already registered? </span>
+        <a href="{% url 'login' %}" class="text-primary font-weight-bold text-decoration-none">Sign In</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

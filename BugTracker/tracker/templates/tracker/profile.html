@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% block title %}My Profile{% endblock %}
+{% block page_title %}User Profile Settings{% endblock %}
+
+{% block content %}
+<div class="row">
+  <!-- Profile stats sidebar card -->
+  <div class="col-lg-4 mb-4">
+    <div class="card-custom text-center shadow-sm">
+      <div class="position-relative d-inline-block mb-3">
+        {% if profile.photo %}
+          <img src="{{ profile.photo.url }}" class="rounded-circle border" width="120" height="120" style="object-fit: cover; border-width: 3px !important; border-color: var(--primary-color) !important;">
+        {% else %}
+          <div class="d-flex align-items-center justify-content-center bg-primary text-white rounded-circle border mx-auto" style="width: 120px; height: 120px; font-weight: 700; font-size: 3rem; border-width: 3px !important; border-color: var(--primary-color) !important;">
+            {{ user.username|slice:":2"|upper }}
+          </div>
+        {% endif %}
+      </div>
+      
+      <h4 class="fw-bold mb-1 text-main">{{ user.first_name }} {{ user.last_name }}</h4>
+      <p class="text-muted mb-2">@{{ user.username }}</p>
+      
+      <span class="badge {% if profile.role == 'Admin' %}bg-danger bg-opacity-10 text-danger{% elif profile.role == 'Developer' %}bg-primary bg-opacity-10 text-primary{% else %}bg-success bg-opacity-10 text-success{% endif %} px-3 py-2" style="font-size: 0.85rem;">
+        {{ profile.role }}
+      </span>
+
+      <div class="text-muted mt-2" style="font-size: 0.8rem;">
+        Member since {{ profile.joined_date|date:"F Y" }}
+      </div>
+
+      <!-- User statistics breakdown -->
+      <div class="row border-top mt-4 pt-3 text-start" style="border-color: var(--border-color) !important;">
+        <div class="col-4 text-center">
+          <span class="text-muted d-block" style="font-size: 0.75rem; font-weight: 600;">ASSIGNED</span>
+          <span class="fw-bold fs-5 text-primary">{{ profile.assigned_bugs_count }}</span>
+        </div>
+        <div class="col-4 text-center border-start border-end" style="border-color: var(--border-color) !important;">
+          <span class="text-muted d-block" style="font-size: 0.75rem; font-weight: 600;">RESOLVED</span>
+          <span class="fw-bold fs-5 text-success">{{ profile.resolved_bugs_count }}</span>
+        </div>
+        <div class="col-4 text-center">
+          <span class="text-muted d-block" style="font-size: 0.75rem; font-weight: 600;">CLOSED</span>
+          <span class="fw-bold fs-5 text-secondary">{{ profile.closed_bugs_count }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Profile Settings edit form -->
+  <div class="col-lg-8">
+    <div class="card-custom shadow-sm">
+      <h5 class="fw-bold mb-4 border-bottom pb-2" style="border-color: var(--border-color) !important;">Edit Profile Details</h5>
+
+      <form method="POST" action="{% url 'profile' %}" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        {% if form.errors %}
+          <div class="alert alert-danger border-0 p-2 mb-3" style="font-size: 0.85rem;">
+            Please correct the validation errors below.
+          </div>
+        {% endif %}
+
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">First Name</label>
+            {{ form.first_name }}
+            {% if form.first_name.errors %}
+              <div class="text-danger mt-1" style="font-size: 0.775rem;">{{ form.first_name.errors.0 }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Last Name</label>
+            {{ form.last_name }}
+            {% if form.last_name.errors %}
+              <div class="text-danger mt-1" style="font-size: 0.775rem;">{{ form.last_name.errors.0 }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Email Address</label>
+          {{ form.email }}
+          {% if form.email.errors %}
+            <div class="text-danger mt-1" style="font-size: 0.775rem;">{{ form.email.errors.0 }}</div>
+          {% endif %}
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Change Profile Picture</label>
+          {{ form.photo }}
+          {% if form.photo.errors %}
+            <div class="text-danger mt-1" style="font-size: 0.775rem;">{{ form.photo.errors.0 }}</div>
+          {% endif %}
+        </div>
+
+        <div class="d-flex justify-content-end pt-2 border-top" style="border-color: var(--border-color) !important;">
+          <button type="submit" class="btn btn-primary btn-sm px-4" style="font-weight: 600;">Save Profile</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

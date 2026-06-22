@@ -1,0 +1,215 @@
+{% extends 'base.html' %}
+{% block title %}Bugs List{% endblock %}
+{% block page_title %}Bug Tracker Board{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+  <div class="col-12 d-flex flex-wrap align-items-center justify-content-between gap-3">
+    <div>
+      <p class="text-muted mb-0">Monitor, filter, and track registered bugs across all products.</p>
+    </div>
+    {% if global_user_role == 'Admin' or global_user_role == 'Tester' %}
+      <a href="{% url 'bug_create' %}" class="btn btn-primary d-flex align-items-center gap-2" style="border-radius: 8px; font-weight: 600;">
+        <i class="bi bi-plus-lg"></i> Report New Bug
+      </a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row">
+  <!-- Sidebar filters -->
+  <div class="col-lg-3 mb-4">
+    <div class="card-custom">
+      <h5 class="fw-bold mb-3 d-flex align-items-center gap-2">
+        <i class="bi bi-filter"></i> Filters
+        {% if status_filter or priority_filter or severity_filter or bug_type_filter or assignee_filter or date_range %}
+          <a href="{% url 'bug_list' %}" class="btn btn-sm btn-link text-danger ms-auto p-0 text-decoration-none" style="font-size: 0.8rem;">Clear All</a>
+        {% endif %}
+      </h5>
+
+      <form method="GET" action="{% url 'bug_list' %}" id="filter-form">
+        <!-- Text search -->
+        <div class="mb-3">
+          <label class="form-label font-weight-bold" style="font-size: 0.8rem; font-weight: 600;">Global Search</label>
+          <div class="input-group">
+            <span class="input-group-text bg-transparent border-end-0" style="border-color: var(--border-color);"><i class="bi bi-search text-muted"></i></span>
+            <input type="text" name="q" class="form-control border-start-0" placeholder="Search title, description..." value="{{ search_query }}">
+          </div>
+        </div>
+
+        <!-- Date Range -->
+        <div class="mb-3">
+          <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">Date Logged</label>
+          <select name="date_range" class="form-select" onchange="this.form.submit()">
+            <option value="">All Time</option>
+            <option value="today" {% if date_range == 'today' %}selected{% endif %}>Today</option>
+            <option value="week" {% if date_range == 'week' %}selected{% endif %}>Past 7 Days</option>
+            <option value="month" {% if date_range == 'month' %}selected{% endif %}>Past 30 Days</option>
+          </select>
+        </div>
+
+        <!-- Status Filter -->
+        <div class="mb-3">
+          <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">Status</label>
+          <div style="max-height: 120px; overflow-y: auto; padding-right: 5px;">
+            {% for s in all_statuses %}
+              <div class="form-check mb-1">
+                <input class="form-check-input" type="checkbox" name="status" value="{{ s }}" id="status_{{ s }}" {% if s in status_filter %}checked{% endif %} onchange="this.form.submit()">
+                <label class="form-check-label" for="status_{{ s }}" style="font-size: 0.85rem;">{{ s }}</label>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Priority Filter -->
+        <div class="mb-3">
+          <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">Priority</label>
+          <div>
+            {% for p in all_priorities %}
+              <div class="form-check mb-1">
+                <input class="form-check-input" type="checkbox" name="priority" value="{{ p }}" id="priority_{{ p }}" {% if p in priority_filter %}checked{% endif %} onchange="this.form.submit()">
+                <label class="form-check-label" for="priority_{{ p }}" style="font-size: 0.85rem;">{{ p }}</label>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Severity Filter -->
+        <div class="mb-3">
+          <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">Severity</label>
+          <div>
+            {% for sev in all_severities %}
+              <div class="form-check mb-1">
+                <input class="form-check-input" type="checkbox" name="severity" value="{{ sev }}" id="severity_{{ sev }}" {% if sev in severity_filter %}checked{% endif %} onchange="this.form.submit()">
+                <label class="form-check-label" for="severity_{{ sev }}" style="font-size: 0.85rem;">{{ sev }}</label>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Bug Type Filter -->
+        <div class="mb-3">
+          <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">Bug Type</label>
+          <div style="max-height: 120px; overflow-y: auto; padding-right: 5px;">
+            {% for t in all_types %}
+              <div class="form-check mb-1">
+                <input class="form-check-input" type="checkbox" name="bug_type" value="{{ t }}" id="type_{{ t }}" {% if t in bug_type_filter %}checked{% endif %} onchange="this.form.submit()">
+                <label class="form-check-label" for="type_{{ t }}" style="font-size: 0.85rem;">{{ t }}</label>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Assignee Filter (Admin only/Tester only filter helper) -->
+        {% if global_user_role == 'Admin' or global_user_role == 'Tester' %}
+        <div class="mb-3">
+          <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">Assigned Developer</label>
+          <select name="assignee" class="form-select" onchange="this.form.submit()">
+            <option value="">All Developers</option>
+            {% for dev in all_developers %}
+              <option value="{{ dev.id }}" {% if assignee_filter == dev.id|slugify %}selected{% endif %}>{{ dev.username }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+
+        <button type="submit" class="btn btn-primary btn-sm w-100 mt-2">Apply Filters</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Bugs Table list -->
+  <div class="col-lg-9">
+    <div class="card-custom p-0" style="overflow: hidden;">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th class="ps-4">Title / Project</th>
+              <th>Type</th>
+              <th>Priority</th>
+              <th>Severity</th>
+              <th>Assignee</th>
+              <th>Status</th>
+              <th class="pe-4">Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if bugs %}
+              {% for bug in bugs %}
+                <tr style="cursor: pointer;" onclick="window.location='{% url 'bug_detail' bug.pk %}'">
+                  <td class="ps-4 py-3">
+                    <span class="fw-bold d-block text-main mb-1">{{ bug.title }}</span>
+                    <span class="text-muted" style="font-size: 0.8rem;">
+                      {{ bug.project_name }} &middot; {{ bug.module_name }}
+                    </span>
+                  </td>
+                  <td><span class="badge bg-secondary bg-opacity-10 text-secondary" style="font-size:0.75rem;">{{ bug.bug_type }}</span></td>
+                  <td>
+                    {% if bug.priority == 'Low' %}
+                      <span class="badge-priority-low">Low</span>
+                    {% elif bug.priority == 'Medium' %}
+                      <span class="badge-priority-medium">Medium</span>
+                    {% elif bug.priority == 'High' %}
+                      <span class="badge-priority-high">High</span>
+                    {% elif bug.priority == 'Critical' %}
+                      <span class="badge-priority-critical">Critical</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if bug.severity == 'Minor' %}
+                      <span class="badge bg-secondary bg-opacity-25 text-dark-emphasis" style="font-size: 0.75rem;">Minor</span>
+                    {% elif bug.severity == 'Major' %}
+                      <span class="badge bg-warning bg-opacity-25 text-warning-emphasis" style="font-size: 0.75rem;">Major</span>
+                    {% elif bug.severity == 'Critical' %}
+                      <span class="badge bg-danger bg-opacity-25 text-danger-emphasis" style="font-size: 0.75rem;">Critical</span>
+                    {% elif bug.severity == 'Blocker' %}
+                      <span class="badge bg-danger text-white" style="font-size: 0.75rem;">Blocker</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if bug.assigned_to %}
+                      <span class="fw-semibold text-main">{{ bug.assigned_to.username }}</span>
+                    {% else %}
+                      <span class="text-danger italic" style="font-size: 0.85rem; font-style: italic;">Unassigned</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if bug.status == 'Open' %}
+                      <span class="badge bg-info bg-opacity-25 text-info-emphasis">Open</span>
+                    {% elif bug.status == 'Assigned' %}
+                      <span class="badge bg-primary bg-opacity-25 text-primary-emphasis">Assigned</span>
+                    {% elif bug.status == 'In Progress' %}
+                      <span class="badge bg-warning bg-opacity-25 text-warning-emphasis">In Progress</span>
+                    {% elif bug.status == 'Resolved' %}
+                      <span class="badge bg-success bg-opacity-25 text-success-emphasis">Resolved</span>
+                    {% elif bug.status == 'Testing' %}
+                      <span class="badge bg-purple bg-opacity-25 text-purple-emphasis" style="background-color:rgba(111, 66, 193, 0.2); color:#6f42c1;">Testing</span>
+                    {% elif bug.status == 'Closed' %}
+                      <span class="badge bg-secondary bg-opacity-25 text-secondary-emphasis">Closed</span>
+                    {% elif bug.status == 'Reopened' %}
+                      <span class="badge bg-danger bg-opacity-25 text-danger-emphasis">Reopened</span>
+                    {% elif bug.status == 'Rejected' %}
+                      <span class="badge bg-dark bg-opacity-25 text-dark-emphasis">Rejected</span>
+                    {% endif %}
+                  </td>
+                  <td class="pe-4 py-3 text-muted" style="font-size: 0.85rem;">
+                    {{ bug.created_at|date:"d M Y" }}
+                  </td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="7" class="text-center py-5 text-muted">
+                  <i class="bi bi-search d-block mb-2" style="font-size: 2rem;"></i>
+                  No bugs found matching current criteria.
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

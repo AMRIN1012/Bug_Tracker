@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}Activity Logs{% endblock %}
+{% block page_title %}System Activity Timeline{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+  <div class="col-12 d-flex flex-wrap align-items-center justify-content-between gap-3">
+    <div>
+      <p class="text-muted mb-0">Audit log trail documenting issues updates, assignments, comments, and role modifications.</p>
+    </div>
+    <div class="col-sm-4 col-md-3">
+      <form method="GET" action="{% url 'activity_logs' %}">
+        <div class="input-group input-group-sm">
+          <input type="text" name="q" class="form-control" placeholder="Search logs..." value="{{ search_query|default:"" }}">
+          <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i></button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-lg-12">
+    <div class="card-custom">
+      <div class="timeline-container mt-2">
+        {% if logs %}
+          {% for log in logs %}
+            <div class="timeline-item">
+              <span class="timeline-timestamp d-block mb-1 text-muted" style="font-size: 0.8rem;">
+                <i class="bi bi-clock"></i> {{ log.created_at|date:"d M Y H:i:s" }}
+              </span>
+              <div class="timeline-title">
+                {{ log.action }}
+                {% if log.bug %}
+                  - <a href="{% url 'bug_detail' log.bug.pk %}" class="text-primary text-decoration-none">{{ log.bug.title }}</a>
+                {% endif %}
+              </div>
+              <div class="timeline-details text-muted mt-1">
+                {{ log.details|default:"" }}
+                <span class="text-main fw-semibold">by {{ log.user.username }}</span>
+                {% if log.user.profile.role %}
+                  <span class="badge {% if log.user.profile.role == 'Admin' %}bg-danger bg-opacity-10 text-danger{% elif log.user.profile.role == 'Developer' %}bg-primary bg-opacity-10 text-primary{% else %}bg-success bg-opacity-10 text-success{% endif %} p-1" style="font-size:0.65rem;">
+                    {{ log.user.profile.role }}
+                  </span>
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-center py-5 text-muted">
+            <i class="bi bi-journal-x d-block mb-2" style="font-size: 2.5rem;"></i>
+            No activity log matches your request.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

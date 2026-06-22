@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% block title %}Notifications{% endblock %}
+{% block page_title %}My Notifications{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+  <div class="col-12 d-flex flex-wrap align-items-center justify-content-between gap-3">
+    <div>
+      <p class="text-muted mb-0">Review assignments, comment notices, and status changes relevant to you.</p>
+    </div>
+    {% if global_unread_count > 0 %}
+      <a href="{% url 'mark_all_notifications_read' %}" class="btn btn-sm btn-outline-primary fw-semibold rounded" style="border-radius: 8px;">
+        <i class="bi bi-envelope-open"></i> Mark All as Read
+      </a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-lg-8">
+    <div class="card-custom p-0" style="overflow: hidden;">
+      <ul class="list-group list-group-flush" style="background-color: transparent;">
+        {% if notifications %}
+          {% for notification in notifications %}
+            <li class="list-group-item d-flex align-items-start justify-content-between gap-3 py-3 border-bottom {% if not notification.is_read %}bg-primary bg-opacity-10{% endif %}" 
+                id="notification-item-{{ notification.id }}" 
+                style="background-color: transparent; border-color: var(--border-color) !important;">
+              <div class="d-flex align-items-start gap-3">
+                <div class="mt-1" style="font-size: 1.25rem;">
+                  {% if not notification.is_read %}
+                    <i class="bi bi-envelope-fill text-primary"></i>
+                  {% else %}
+                    <i class="bi bi-envelope-open text-muted"></i>
+                  {% endif %}
+                </div>
+                <div>
+                  <p class="mb-1 text-main {% if not notification.is_read %}fw-semibold{% endif %}" style="font-size: 0.925rem;">
+                    {{ notification.message }}
+                  </p>
+                  <div class="d-flex align-items-center gap-3">
+                    <span class="text-muted" style="font-size: 0.775rem;">{{ notification.created_at|timesince }} ago</span>
+                    {% if notification.bug %}
+                      <a href="{% url 'bug_detail' notification.bug.pk %}" class="btn btn-sm btn-link p-0 text-primary text-decoration-none" style="font-size: 0.8rem;">
+                        View Bug Details <i class="bi bi-arrow-right"></i>
+                      </a>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+              
+              {% if not notification.is_read %}
+                <button onclick="markAsRead({{ notification.id }})" class="btn btn-sm btn-link text-muted p-0 text-decoration-none" style="font-size: 0.8rem;" title="Mark as Read">
+                  <i class="bi bi-check-lg" style="font-size: 1.1rem;"></i>
+                </button>
+              {% endif %}
+            </li>
+          {% endfor %}
+        {% else %}
+          <div class="text-center py-5 text-muted">
+            <i class="bi bi-bell-slash d-block mb-2" style="font-size: 2.5rem;"></i>
+            You have no notifications yet.
+          </div>
+        {% endif %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function markAsRead(notificationId) {
+    const url = `/notifications/${notificationId}/mark-read/`;
+    
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': '{{ csrf_token }}',
+        'Content-Type': 'application/json'
+      }
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.status === 'ok') {
+        const item = document.getElementById(`notification-item-${notificationId}`);
+        if (item) {
+          // Remove unread styles
+          item.classList.remove('bg-primary', 'bg-opacity-10');
+          // Replace close/check button
+          const button = item.querySelector('button');
+          if (button) button.remove();
+          // Update envelope icon
+          const icon = item.querySelector('.bi-envelope-fill');
+          if (icon) {
+            icon.classList.remove('bi-envelope-fill', 'text-primary');
+            icon.classList.add('bi-envelope-open', 'text-muted');
+          }
+          // Update badge count dynamically
+          const navbarBadge = document.querySelector('.top-navbar .badge');
+          if (navbarBadge) {
+            let count = parseInt(navbarBadge.innerText) || 0;
+            if (count > 1) {
+              navbarBadge.innerText = count - 1;
+            } else {
+              navbarBadge.remove();
+            }
+          }
+        }
+      }
+    })
+    .catch(error => console.error('Error marking notification as read:', error));
+  }
+</script>
+{% endblock %}

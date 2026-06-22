@@ -1,0 +1,332 @@
+{% extends 'base.html' %}
+{% block title %}Analytics & Reports{% endblock %}
+{% block page_title %}Analytics Dashboard{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+  <div class="col-12 d-flex flex-wrap align-items-center justify-content-between gap-3">
+    <div>
+      <p class="text-muted mb-0">Evaluate team velocity, inspect bug severity spreads, and measure product reliability.</p>
+    </div>
+    
+    <!-- Project filter dropdown -->
+    <div>
+      <form method="GET" action="{% url 'analytics' %}" id="project-filter-form">
+        <div class="d-flex align-items-center gap-2">
+          <label class="form-label mb-0 fw-semibold text-nowrap" style="font-size: 0.85rem;">Project Scope:</label>
+          <select name="project" class="form-select form-select-sm" onchange="this.form.submit()">
+            <option value="">-- All Projects --</option>
+            {% for proj in projects %}
+              <option value="{{ proj }}" {% if selected_project == proj %}selected{% endif %}>{{ proj }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Graphs Rows -->
+<div class="row">
+  <!-- Weekly Trend Line Chart -->
+  <div class="col-lg-6 mb-4">
+    <div class="card-custom h-100">
+      <h5 class="card-title fw-bold mb-4">Weekly Bug Logs</h5>
+      <div style="position: relative; height: 300px;">
+        <canvas id="weeklyTrendChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Priority Breakdown -->
+  <div class="col-lg-6 mb-4">
+    <div class="card-custom h-100">
+      <h5 class="card-title fw-bold mb-4">Priority Analysis</h5>
+      <div style="position: relative; height: 300px; display: flex; align-items: center; justify-content: center;">
+        <canvas id="priorityAnalysisChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <!-- Status Distribution -->
+  <div class="col-lg-5 mb-4">
+    <div class="card-custom h-100">
+      <h5 class="card-title fw-bold mb-4">Status Distribution</h5>
+      <div style="position: relative; height: 320px; display: flex; align-items: center; justify-content: center;">
+        <canvas id="statusDistributionChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Developer Velocity & Performance Comparison -->
+  <div class="col-lg-7 mb-4">
+    <div class="card-custom h-100">
+      <h5 class="card-title fw-bold mb-4">Developer Performance Metrics</h5>
+      <div style="position: relative; height: 320px;">
+        <canvas id="devPerformanceChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Detailed Data Table of Developer performance -->
+<div class="row">
+  <div class="col-lg-12">
+    <div class="card-custom">
+      <h5 class="fw-bold mb-4">Developer Board & Performance</h5>
+      <div class="table-responsive">
+        <table class="table mb-0">
+          <thead>
+            <tr>
+              <th class="ps-4">Developer</th>
+              <th class="text-center">Assigned Bugs</th>
+              <th class="text-center">Resolved / Closed</th>
+              <th class="text-center">Completion Rate</th>
+              <th class="pe-4 text-end">Performance Index</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if dev_performance %}
+              {% for dev in dev_performance %}
+                <tr>
+                  <td class="ps-4 py-3 fw-bold text-main">{{ dev.username }}</td>
+                  <td class="text-center fw-semibold text-primary">{{ dev.assigned }}</td>
+                  <td class="text-center fw-semibold text-success">{{ dev.resolved_or_closed }}</td>
+                  <td class="text-center">
+                    {% if dev.assigned > 0 %}
+                      <!-- Calculate percentage -->
+                      <span class="fw-bold text-main">
+                        {% widthratio dev.resolved_or_closed dev.assigned 100 %}%
+                      </span>
+                    {% else %}
+                      <span class="text-muted">N/A</span>
+                    {% endif %}
+                  </td>
+                  <td class="pe-4 text-end">
+                    {% if dev.assigned > 0 %}
+                      {% widthratio dev.resolved_or_closed dev.assigned 100 as rate %}
+                      {% if rate|add:"0" >= 80 %}
+                        <span class="badge bg-success bg-opacity-10 text-success py-1.5 px-3">Excellent</span>
+                      {% elif rate|add:"0" >= 50 %}
+                        <span class="badge bg-warning bg-opacity-10 text-warning py-1.5 px-3">Good</span>
+                      {% else %}
+                        <span class="badge bg-danger bg-opacity-10 text-danger py-1.5 px-3">Needs Review</span>
+                      {% endif %}
+                    {% else %}
+                      <span class="badge bg-secondary bg-opacity-10 text-secondary py-1.5 px-3">Inactive</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="5" class="text-center py-4 text-muted">No developers found.</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function getThemeColors() {
+    const isDark = document.body.classList.contains('dark-theme');
+    return {
+      text: isDark ? '#9ca3af' : '#64748b',
+      grid: isDark ? '#1f2937' : '#e2e8f0',
+      accent: '#4f46e5'
+    };
+  }
+
+  let themeColors = getThemeColors();
+
+  // --- Weekly Trend line Chart ---
+  const weeklyCtx = document.getElementById('weeklyTrendChart').getContext('2d');
+  const weeklyLabels = [{% for item in weekly_trends %}"{{ item.label }}",{% endfor %}];
+  const weeklyData = [{% for item in weekly_trends %}{{ item.count }},{% endfor %}];
+
+  let weeklyChart = new Chart(weeklyCtx, {
+    type: 'bar',
+    data: {
+      labels: weeklyLabels,
+      datasets: [{
+        label: 'Bugs Reported',
+        data: weeklyData,
+        backgroundColor: '#4f46e5',
+        borderRadius: 6,
+        barThickness: 32
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: themeColors.text }
+        },
+        y: {
+          grid: { color: themeColors.grid },
+          ticks: { color: themeColors.text, stepSize: 1 }
+        }
+      }
+    }
+  });
+
+  // --- Priority Analysis Pie Chart ---
+  const priorityCtx = document.getElementById('priorityAnalysisChart').getContext('2d');
+  const priorityLabels = [{% for key, value in priority_stats.items %}"{{ key }}",{% endfor %}];
+  const priorityVals = [{% for key, value in priority_stats.items %}{{ value }},{% endfor %}];
+
+  const priorityColors = {
+    'Low': '#166534',
+    'Medium': '#eab308',
+    'High': '#ea580c',
+    'Critical': '#dc2626'
+  };
+  const priorityBgColors = priorityLabels.map(label => priorityColors[label] || '#4f46e5');
+
+  let priorityChart = new Chart(priorityCtx, {
+    type: 'pie',
+    data: {
+      labels: priorityLabels,
+      datasets: [{
+        data: priorityVals,
+        backgroundColor: priorityBgColors,
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { color: themeColors.text, boxWidth: 12 }
+        }
+      }
+    }
+  });
+
+  // --- Status Distribution Doughnut Chart ---
+  const statusCtx = document.getElementById('statusDistributionChart').getContext('2d');
+  const statusLabels = [{% for key, value in status_stats.items %}"{{ key }}",{% endfor %}];
+  const statusVals = [{% for key, value in status_stats.items %}{{ value }},{% endfor %}];
+
+  const statusColors = {
+    'Open': '#0dcaf0',
+    'Assigned': '#3b82f6',
+    'In Progress': '#ffc107',
+    'Resolved': '#198754',
+    'Testing': '#6f42c1',
+    'Closed': '#6c757d',
+    'Reopened': '#dc3545',
+    'Rejected': '#adb5bd'
+  };
+  const statusBgColors = statusLabels.map(label => statusColors[label] || '#4f46e5');
+
+  let statusChart = new Chart(statusCtx, {
+    type: 'doughnut',
+    data: {
+      labels: statusLabels,
+      datasets: [{
+        data: statusVals,
+        backgroundColor: statusBgColors,
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { color: themeColors.text, boxWidth: 12 }
+        }
+      }
+    }
+  });
+
+  // --- Developer Performance Comparison Chart ---
+  const devCtx = document.getElementById('devPerformanceChart').getContext('2d');
+  const devLabels = [{% for dev in dev_performance %}"{{ dev.username }}",{% endfor %}];
+  const devAssigned = [{% for dev in dev_performance %}{{ dev.assigned }},{% endfor %}];
+  const devResolved = [{% for dev in dev_performance %}{{ dev.resolved_or_closed }},{% endfor %}];
+
+  let devChart = new Chart(devCtx, {
+    type: 'bar',
+    data: {
+      labels: devLabels,
+      datasets: [
+        {
+          label: 'Assigned Bugs',
+          data: devAssigned,
+          backgroundColor: '#3b82f6',
+          borderRadius: 4
+        },
+        {
+          label: 'Resolved / Closed',
+          data: devResolved,
+          backgroundColor: '#10b981',
+          borderRadius: 4
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'top',
+          labels: { color: themeColors.text }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: themeColors.text }
+        },
+        y: {
+          grid: { color: themeColors.grid },
+          ticks: { color: themeColors.text, stepSize: 1 }
+        }
+      }
+    }
+  });
+
+  // Theme Changed trigger to redraw colors
+  window.addEventListener('themeChanged', (e) => {
+    themeColors = getThemeColors();
+    
+    // Redraw weekly chart
+    weeklyChart.options.scales.y.grid.color = themeColors.grid;
+    weeklyChart.options.scales.x.ticks.color = themeColors.text;
+    weeklyChart.options.scales.y.ticks.color = themeColors.text;
+    weeklyChart.update();
+
+    // Redraw priority chart
+    priorityChart.options.plugins.legend.labels.color = themeColors.text;
+    priorityChart.update();
+
+    // Redraw status chart
+    statusChart.options.plugins.legend.labels.color = themeColors.text;
+    statusChart.update();
+
+    // Redraw dev chart
+    devChart.options.plugins.legend.labels.color = themeColors.text;
+    devChart.options.scales.y.grid.color = themeColors.grid;
+    devChart.options.scales.x.ticks.color = themeColors.text;
+    devChart.options.scales.y.ticks.color = themeColors.text;
+    devChart.update();
+  });
+</script>
+{% endblock %}

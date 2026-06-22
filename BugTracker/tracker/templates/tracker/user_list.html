@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+{% block title %}User Management{% endblock %}
+{% block page_title %}User Management Console{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+  <div class="col-12 d-flex flex-wrap align-items-center justify-content-between gap-3">
+    <div>
+      <p class="text-muted mb-0">Administrate system users, modify permissions, toggle active states, or remove accounts.</p>
+    </div>
+    <div class="col-sm-4 col-md-3">
+      <form method="GET" action="{% url 'user_list' %}">
+        <div class="input-group input-group-sm">
+          <input type="text" name="q" class="form-control" placeholder="Search user..." value="{{ search_query|default:"" }}">
+          <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i></button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-12">
+    <div class="card-custom p-0" style="overflow: hidden;">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th class="ps-4">User</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th class="text-center">Assigned Bugs</th>
+              <th class="text-center">Resolved Bugs</th>
+              <th>Status</th>
+              <th class="pe-4 text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if tracker_users %}
+              {% for u in tracker_users %}
+                <tr>
+                  <td class="ps-4 py-3">
+                    <div class="d-flex align-items-center gap-3">
+                      {% if u.profile.photo %}
+                        <img src="{{ u.profile.photo.url }}" class="rounded-circle border" width="38" height="38" style="object-fit: cover;">
+                      {% else %}
+                        <div class="d-flex align-items-center justify-content-center bg-primary text-white rounded-circle" style="width: 38px; height: 38px; font-weight: 600; font-size: 0.85rem;">
+                          {{ u.username|slice:":2"|upper }}
+                        </div>
+                      {% endif %}
+                      <div>
+                        <span class="fw-bold d-block text-main">{{ u.first_name }} {{ u.last_name }}</span>
+                        <span class="text-muted" style="font-size: 0.8rem;">@{{ u.username }}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td>{{ u.email }}</td>
+                  <td>
+                    <span class="badge {% if u.profile.role == 'Admin' %}bg-danger bg-opacity-10 text-danger{% elif u.profile.role == 'Developer' %}bg-primary bg-opacity-10 text-primary{% else %}bg-success bg-opacity-10 text-success{% endif %}" style="font-size: 0.8rem;">
+                      {{ u.profile.role }}
+                    </span>
+                  </td>
+                  <td class="text-center fw-semibold text-main">{{ u.profile.assigned_bugs_count }}</td>
+                  <td class="text-center fw-semibold text-success">{{ u.profile.resolved_bugs_count }}</td>
+                  <td>
+                    {% if u.is_active %}
+                      <span class="badge bg-success bg-opacity-10 text-success"><i class="bi bi-check-circle-fill"></i> Active</span>
+                    {% else %}
+                      <span class="badge bg-danger bg-opacity-10 text-danger"><i class="bi bi-x-circle-fill"></i> Disabled</span>
+                    {% endif %}
+                  </td>
+                  <td class="pe-4 text-end">
+                    {% if u != user %}
+                      <div class="d-inline-flex gap-2">
+                        <!-- Toggle Status Switch Form -->
+                        <form method="POST" action="{% url 'user_toggle_status' u.pk %}" class="m-0">
+                          {% csrf_token %}
+                          <button type="submit" class="btn btn-sm {% if u.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}" title="Toggle Active Status">
+                            {% if u.is_active %}<i class="bi bi-person-x"></i> Disable{% else %}<i class="bi bi-person-check"></i> Enable{% endif %}
+                          </button>
+                        </form>
+
+                        <!-- Change Role Modal Trigger -->
+                        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editRoleModal_{{ u.id }}">
+                          <i class="bi bi-shield-check"></i> Role
+                        </button>
+
+                        <!-- Delete User Form -->
+                        <form method="POST" action="{% url 'user_delete' u.pk %}" class="m-0" onsubmit="return confirm('Are you sure you want to delete user {{ u.username }}? This action is permanent.');">
+                          {% csrf_token %}
+                          <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete User Account">
+                            <i class="bi bi-trash"></i>
+                          </button>
+                        </form>
+                      </div>
+
+                      <!-- Edit Role Modal -->
+                      <div class="modal fade text-start" id="editRoleModal_{{ u.id }}" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered modal-sm">
+                          <div class="modal-content" style="background-color: var(--card-bg); color: var(--text-main); border: 1px solid var(--border-color);">
+                            <div class="modal-header border-bottom" style="border-color: var(--border-color) !important;">
+                              <h5 class="modal-title fw-bold">Change Role</h5>
+                              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <form method="POST" action="{% url 'user_edit_role' u.pk %}">
+                              {% csrf_token %}
+                              <div class="modal-body">
+                                <p style="font-size: 0.85rem;">Modify access rights for user <strong>{{ u.username }}</strong>.</p>
+                                <div class="mb-3">
+                                  <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">System Access Role</label>
+                                  <select name="role" class="form-select">
+                                    <option value="Admin" {% if u.profile.role == 'Admin' %}selected{% endif %}>Admin</option>
+                                    <option value="Developer" {% if u.profile.role == 'Developer' %}selected{% endif %}>Developer</option>
+                                    <option value="Tester" {% if u.profile.role == 'Tester' %}selected{% endif %}>Tester</option>
+                                  </select>
+                                </div>
+                              </div>
+                              <div class="modal-footer border-top" style="border-color: var(--border-color) !important;">
+                                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="submit" class="btn btn-sm btn-primary">Save Changes</button>
+                              </div>
+                            </form>
+                          </div>
+                        </div>
+                      </div>
+                    {% else %}
+                      <span class="text-muted" style="font-size: 0.8rem;">Current Account (Self)</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="7" class="text-center py-5 text-muted">
+                  <i class="bi bi-people d-block mb-2" style="font-size: 2rem;"></i>
+                  No users match your search criteria.
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

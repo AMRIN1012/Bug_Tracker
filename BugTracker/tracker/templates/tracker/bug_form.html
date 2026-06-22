@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }} Bug{% endblock %}
+{% block page_title %}{{ action }} Bug Record{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8 col-xl-7">
+    <div class="card-custom shadow border-0">
+      <div class="border-bottom pb-3 mb-4" style="border-color: var(--border-color) !important;">
+        <h4 class="fw-bold mb-1 text-main">{{ action }} Bug Report</h4>
+        <p class="text-muted mb-0">Fill in critical parameters to report code faults or system flaws.</p>
+      </div>
+
+      <form method="POST" action="" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger border-0 p-2" style="font-size: 0.85rem;">
+            {% for error in form.non_field_errors %}
+              {{ error }}
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        <div class="mb-3">
+          <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Bug Title</label>
+          {{ form.title }}
+          {% if form.title.errors %}
+            <div class="text-danger mt-1" style="font-size: 0.775rem;">{{ form.title.errors.0 }}</div>
+          {% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Description</label>
+          {{ form.description }}
+          {% if form.description.errors %}
+            <div class="text-danger mt-1" style="font-size: 0.775rem;">{{ form.description.errors.0 }}</div>
+          {% endif %}
+        </div>
+
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Project Name</label>
+            {{ form.project_name }}
+            {% if form.project_name.errors %}
+              <div class="text-danger mt-1" style="font-size: 0.775rem;">{{ form.project_name.errors.0 }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Module Name</label>
+            {{ form.module_name }}
+            {% if form.module_name.errors %}
+              <div class="text-danger mt-1" style="font-size: 0.775rem;">{{ form.module_name.errors.0 }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-md-4 mb-3">
+            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Bug Type</label>
+            {{ form.bug_type }}
+            {% if form.bug_type.errors %}
+              <div class="text-danger mt-1" style="font-size: 0.775rem;">{{ form.bug_type.errors.0 }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-4 mb-3">
+            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Priority</label>
+            {{ form.priority }}
+            {% if form.priority.errors %}
+              <div class="text-danger mt-1" style="font-size: 0.775rem;">{{ form.priority.errors.0 }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-4 mb-3">
+            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Severity</label>
+            {{ form.severity }}
+            {% if form.severity.errors %}
+              <div class="text-danger mt-1" style="font-size: 0.775rem;">{{ form.severity.errors.0 }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Upload Screenshots / Documents (Multiple files allowed)</label>
+          <input type="file" name="attachments" class="form-control" multiple style="border-radius: 8px;">
+          {% if bug %}
+            <div class="mt-2 text-muted" style="font-size: 0.8rem;">
+              Note: Current attachments will be preserved. Uploading new files will append them.
+            </div>
+          {% endif %}
+        </div>
+
+        <div class="d-flex align-items-center justify-content-end gap-2 border-top pt-3" style="border-color: var(--border-color) !important;">
+          {% if bug %}
+            <a href="{% url 'bug_detail' bug.pk %}" class="btn btn-outline-secondary btn-sm px-4">Cancel</a>
+          {% else %}
+            <a href="{% url 'bug_list' %}" class="btn btn-outline-secondary btn-sm px-4">Cancel</a>
+          {% endif %}
+          <button type="submit" class="btn btn-primary btn-sm px-4" style="font-weight: 600;">Save Bug Report</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

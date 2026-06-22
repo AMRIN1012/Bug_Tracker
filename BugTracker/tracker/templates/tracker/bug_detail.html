@@ -1,0 +1,353 @@
+{% extends 'base.html' %}
+{% block title %}Bug Detail: {{ bug.title }}{% endblock %}
+{% block page_title %}Bug Details #{{ bug.id }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+  <div class="col-12 d-flex flex-wrap align-items-center justify-content-between gap-3">
+    <div>
+      <a href="{% url 'bug_list' %}" class="btn btn-sm btn-link text-muted p-0 text-decoration-none"><i class="bi bi-arrow-left"></i> Back to list</a>
+      <h3 class="fw-bold mt-1 text-main">{{ bug.title }}</h3>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      {% if global_user_role == 'Admin' or global_user_role == 'Tester' and bug.created_by == user %}
+        <a href="{% url 'bug_edit' bug.pk %}" class="btn btn-outline-primary btn-sm rounded" style="font-weight: 600;">
+          <i class="bi bi-pencil"></i> Edit Details
+        </a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <!-- Left Side: Main details, attachments, comments -->
+  <div class="col-lg-8">
+    <!-- Description Card -->
+    <div class="card-custom">
+      <h5 class="fw-bold mb-3">Description</h5>
+      <p class="text-main" style="white-space: pre-wrap; line-height: 1.6; font-size: 0.95rem;">{{ bug.description }}</p>
+    </div>
+
+    <!-- Attachments Card -->
+    <div class="card-custom">
+      <h5 class="fw-bold mb-3">Attachments & Screen Proofs</h5>
+      {% if bug.attachments.all %}
+        <div class="row g-3">
+          {% for attachment in bug.attachments.all %}
+            <div class="col-sm-6 col-md-4">
+              <div class="card h-100 border rounded shadow-sm bg-light-subtle" style="overflow: hidden; background-color: var(--card-bg); border-color: var(--border-color) !important;">
+                {% if attachment.is_image %}
+                  <div class="text-center bg-black border-bottom d-flex align-items-center justify-content-center" style="height: 140px; overflow: hidden;">
+                    <img src="{{ attachment.file.url }}" class="img-fluid" style="max-height: 140px; object-fit: contain; width: 100%;" alt="{{ attachment.filename }}" data-bs-toggle="modal" data-bs-target="#imgModal_{{ attachment.id }}">
+                  </div>
+                {% else %}
+                  <div class="d-flex align-items-center justify-content-center border-bottom text-muted" style="height: 140px; font-size: 3rem;">
+                    <i class="bi bi-file-earmark-zip"></i>
+                  </div>
+                {% endif %}
+                <div class="card-body p-2 d-flex flex-column justify-content-between">
+                  <span class="text-truncate d-block fw-semibold" style="font-size: 0.8rem; color: var(--text-main);" title="{{ attachment.filename }}">{{ attachment.filename }}</span>
+                  <div class="d-flex align-items-center justify-content-between mt-2 pt-2 border-top" style="border-color: var(--border-color) !important;">
+                    <span class="text-muted" style="font-size: 0.7rem;">{{ attachment.uploaded_at|date:"d M H:i" }}</span>
+                    <a href="{{ attachment.file.url }}" download class="btn btn-sm btn-link p-0 text-primary" style="font-size: 0.8rem;"><i class="bi bi-download"></i> Download</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Image Modal Preview -->
+            {% if attachment.is_image %}
+              <div class="modal fade" id="imgModal_{{ attachment.id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered modal-lg">
+                  <div class="modal-content border-0 bg-transparent">
+                    <div class="modal-header border-0 p-0 position-relative">
+                      <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-0 text-center">
+                      <img src="{{ attachment.file.url }}" class="img-fluid rounded" style="max-height: 90vh;">
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-muted mb-0" style="font-size: 0.875rem;">No attachments uploaded for this bug.</p>
+      {% endif %}
+    </div>
+
+    <!-- Threaded Comments System -->
+    <div class="card-custom">
+      <h5 class="fw-bold mb-4">Comments & Collaboration</h5>
+      
+      <!-- New comment form -->
+      <form method="POST" action="{% url 'bug_detail' bug.pk %}" class="mb-4">
+        {% csrf_token %}
+        <input type="hidden" name="comment_submit" value="1">
+        <div class="mb-3">
+          {{ comment_form.comment_text }}
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm rounded" style="font-weight: 600;">Post Comment</button>
+      </form>
+
+      <!-- Comments list -->
+      <div class="comment-thread-container">
+        {% if comments %}
+          {% for comment in comments %}
+            <!-- Parent Comment -->
+            <div class="comment-card shadow-sm">
+              <div class="comment-header">
+                <div class="comment-author-info">
+                  {% if comment.user.profile.photo %}
+                    <img src="{{ comment.user.profile.photo.url }}">
+                  {% else %}
+                    <div class="d-flex align-items-center justify-content-center bg-primary text-white rounded-circle" style="width: 32px; height: 32px; font-size: 0.8rem; font-weight: 600;">
+                      {{ comment.user.username|slice:":2"|upper }}
+                    </div>
+                  {% endif %}
+                  <div>
+                    <span class="name text-main">{{ comment.user.username }}</span>
+                    <span class="role-badge {% if comment.user.profile.role == 'Admin' %}bg-danger bg-opacity-10 text-danger{% elif comment.user.profile.role == 'Developer' %}bg-primary bg-opacity-10 text-primary{% else %}bg-success bg-opacity-10 text-success{% endif %}">
+                      {{ comment.user.profile.role }}
+                    </span>
+                  </div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                  <span class="comment-timestamp">{{ comment.created_at|timesince }} ago</span>
+                  {% if comment.user == user or global_user_role == 'Admin' %}
+                    <a href="{% url 'comment_delete' comment.pk %}" class="btn btn-link btn-sm text-danger p-0" title="Delete comment"><i class="bi bi-trash"></i></a>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="comment-content">
+                {{ comment.comment_text }}
+              </div>
+              <div class="mt-2 text-start">
+                <button class="btn btn-sm btn-link p-0 text-primary text-decoration-none" style="font-size: 0.8rem;" type="button" data-bs-toggle="collapse" data-bs-target="#replyForm_{{ comment.id }}">
+                  <i class="bi bi-reply"></i> Reply
+                </button>
+              </div>
+
+              <!-- Reply Form Collapse -->
+              <div class="collapse mt-2" id="replyForm_{{ comment.id }}">
+                <form method="POST" action="{% url 'bug_detail' bug.pk %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="comment_submit" value="1">
+                  <input type="hidden" name="parent_id" value="{{ comment.id }}">
+                  <div class="mb-2">
+                    <textarea name="comment_text" class="form-control form-control-sm" rows="2" placeholder="Write a reply..." required></textarea>
+                  </div>
+                  <button type="submit" class="btn btn-primary btn-sm rounded" style="font-size: 0.775rem;">Submit Reply</button>
+                </form>
+              </div>
+
+              <!-- Replies rendering -->
+              {% if comment.replies.all %}
+                <div class="comment-replies">
+                  {% for reply in comment.replies.all %}
+                    <div class="comment-card shadow-sm p-3">
+                      <div class="comment-header">
+                        <div class="comment-author-info">
+                          {% if reply.user.profile.photo %}
+                            <img src="{{ reply.user.profile.photo.url }}">
+                          {% else %}
+                            <div class="d-flex align-items-center justify-content-center bg-primary text-white rounded-circle" style="width: 32px; height: 32px; font-size: 0.8rem; font-weight: 600;">
+                              {{ reply.user.username|slice:":2"|upper }}
+                            </div>
+                          {% endif %}
+                          <div>
+                            <span class="name text-main">{{ reply.user.username }}</span>
+                            <span class="role-badge {% if reply.user.profile.role == 'Admin' %}bg-danger bg-opacity-10 text-danger{% elif reply.user.profile.role == 'Developer' %}bg-primary bg-opacity-10 text-primary{% else %}bg-success bg-opacity-10 text-success{% endif %}">
+                              {{ reply.user.profile.role }}
+                            </span>
+                          </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                          <span class="comment-timestamp">{{ reply.created_at|timesince }} ago</span>
+                          {% if reply.user == user or global_user_role == 'Admin' %}
+                            <a href="{% url 'comment_delete' reply.pk %}" class="btn btn-link btn-sm text-danger p-0" title="Delete reply"><i class="bi bi-trash"></i></a>
+                          {% endif %}
+                        </div>
+                      </div>
+                      <div class="comment-content">
+                        {{ reply.comment_text }}
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        {% else %}
+          <p class="text-muted py-3 text-center mb-0" style="font-size: 0.875rem;">No comments yet. Start the conversation!</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Side: Sidebar Meta Information & State Workflows -->
+  <div class="col-lg-4">
+    <!-- Meta Details Card -->
+    <div class="card-custom">
+      <h5 class="fw-bold mb-4">Metadata Info</h5>
+
+      <div class="mb-3 border-bottom pb-2" style="border-color: var(--border-color) !important;">
+        <span class="text-muted d-block" style="font-size: 0.775rem;">STATUS</span>
+        <span class="fw-bold fs-6">
+          {% if bug.status == 'Open' %}
+            <span class="badge bg-info bg-opacity-25 text-info-emphasis">Open</span>
+          {% elif bug.status == 'Assigned' %}
+            <span class="badge bg-primary bg-opacity-25 text-primary-emphasis">Assigned</span>
+          {% elif bug.status == 'In Progress' %}
+            <span class="badge bg-warning bg-opacity-25 text-warning-emphasis">In Progress</span>
+          {% elif bug.status == 'Resolved' %}
+            <span class="badge bg-success bg-opacity-25 text-success-emphasis">Resolved</span>
+          {% elif bug.status == 'Testing' %}
+            <span class="badge bg-purple bg-opacity-25 text-purple-emphasis" style="background-color:rgba(111, 66, 193, 0.2); color:#6f42c1;">Testing</span>
+          {% elif bug.status == 'Closed' %}
+            <span class="badge bg-secondary bg-opacity-25 text-secondary-emphasis">Closed</span>
+          {% elif bug.status == 'Reopened' %}
+            <span class="badge bg-danger bg-opacity-25 text-danger-emphasis">Reopened</span>
+          {% elif bug.status == 'Rejected' %}
+            <span class="badge bg-dark bg-opacity-25 text-dark-emphasis">Rejected</span>
+          {% endif %}
+        </span>
+      </div>
+
+      <div class="row mb-3">
+        <div class="col-6">
+          <span class="text-muted d-block" style="font-size: 0.775rem;">PRIORITY</span>
+          {% if bug.priority == 'Low' %}
+            <span class="badge-priority-low">Low</span>
+          {% elif bug.priority == 'Medium' %}
+            <span class="badge-priority-medium">Medium</span>
+          {% elif bug.priority == 'High' %}
+            <span class="badge-priority-high">High</span>
+          {% elif bug.priority == 'Critical' %}
+            <span class="badge-priority-critical">Critical</span>
+          {% endif %}
+        </div>
+        <div class="col-6">
+          <span class="text-muted d-block" style="font-size: 0.775rem;">SEVERITY</span>
+          {% if bug.severity == 'Minor' %}
+            <span class="badge bg-secondary bg-opacity-25 text-dark-emphasis" style="font-size: 0.775rem;">Minor</span>
+          {% elif bug.severity == 'Major' %}
+            <span class="badge bg-warning bg-opacity-25 text-warning-emphasis" style="font-size: 0.775rem;">Major</span>
+          {% elif bug.severity == 'Critical' %}
+            <span class="badge bg-danger bg-opacity-25 text-danger-emphasis" style="font-size: 0.775rem;">Critical</span>
+          {% elif bug.severity == 'Blocker' %}
+            <span class="badge bg-danger text-white" style="font-size: 0.775rem;">Blocker</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="mb-3 border-bottom pb-2" style="border-color: var(--border-color) !important;">
+        <span class="text-muted d-block" style="font-size: 0.775rem;">PROJECT & MODULE</span>
+        <span class="fw-semibold text-main">{{ bug.project_name }}</span>
+        <span class="text-muted d-block" style="font-size: 0.85rem;">Module: {{ bug.module_name }}</span>
+      </div>
+
+      <div class="mb-3 border-bottom pb-2" style="border-color: var(--border-color) !important;">
+        <span class="text-muted d-block" style="font-size: 0.775rem;">BUG TYPE</span>
+        <span class="badge bg-secondary bg-opacity-10 text-secondary" style="font-size: 0.8rem;">{{ bug.bug_type }}</span>
+      </div>
+
+      <div class="mb-3 border-bottom pb-2" style="border-color: var(--border-color) !important;">
+        <span class="text-muted d-block" style="font-size: 0.775rem;">LOGGED BY</span>
+        <span class="text-main fw-semibold">{{ bug.created_by.username|default:"System" }}</span>
+        <span class="text-muted d-block" style="font-size: 0.8rem;">on {{ bug.created_at|date:"d M Y H:i" }}</span>
+      </div>
+
+      <div class="mb-3">
+        <span class="text-muted d-block" style="font-size: 0.775rem;">ASSIGNEE</span>
+        {% if bug.assigned_to %}
+          <span class="text-main fw-semibold"><i class="bi bi-person-check text-primary"></i> {{ bug.assigned_to.username }}</span>
+        {% else %}
+          <span class="text-danger font-italic" style="font-size: 0.875rem; font-style: italic;">Unassigned</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Workflow Management & Assign Form -->
+    <div class="card-custom">
+      <h5 class="fw-bold mb-3">Actions & Workflow</h5>
+
+      <!-- ADMIN: Assignment Control -->
+      {% if global_user_role == 'Admin' %}
+        <form method="POST" action="{% url 'bug_assign' bug.pk %}" class="mb-4 border-bottom pb-3" style="border-color: var(--border-color) !important;">
+          {% csrf_token %}
+          <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">Assign Developer</label>
+          <div class="input-group">
+            <select name="developer_id" class="form-select form-select-sm">
+              <option value="">-- Select Developer --</option>
+              {% for dev in developers %}
+                <option value="{{ dev.id }}" {% if bug.assigned_to == dev %}selected{% endif %}>{{ dev.username }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary btn-sm">Assign</button>
+          </div>
+        </form>
+      {% endif %}
+
+      <!-- Workflow transition form -->
+      <div>
+        <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">Update Workflow Status</label>
+        <form method="POST" action="{% url 'bug_status_update' bug.pk %}">
+          {% csrf_token %}
+          <div class="d-flex flex-wrap gap-2">
+            {% if global_user_role == 'Admin' %}
+              <!-- Admin can change to any status -->
+              {% for state in all_statuses %}
+                {% if bug.status != state %}
+                  <button type="submit" name="status" value="{{ state }}" class="btn btn-outline-secondary btn-sm">{{ state }}</button>
+                {% endif %}
+              {% endfor %}
+            {% elif global_user_role == 'Developer' and bug.assigned_to == user %}
+              <!-- Dev can change to: In Progress, Resolved -->
+              {% if bug.status == 'Assigned' %}
+                <button type="submit" name="status" value="In Progress" class="btn btn-warning btn-sm">Start Work</button>
+              {% elif bug.status == 'In Progress' or bug.status == 'Reopened' %}
+                <button type="submit" name="status" value="Resolved" class="btn btn-success btn-sm">Resolve Bug</button>
+              {% else %}
+                <span class="text-muted" style="font-size: 0.8rem;">Waiting on other roles.</span>
+              {% endif %}
+            {% elif global_user_role == 'Tester' %}
+              <!-- Tester can change to: Testing, Closed, Reopened, Rejected -->
+              {% if bug.status == 'Resolved' %}
+                <button type="submit" name="status" value="Testing" class="btn btn-purple btn-sm" style="background-color:#6f42c1; color:white;">Start Testing</button>
+              {% elif bug.status == 'Testing' %}
+                <button type="submit" name="status" value="Closed" class="btn btn-success btn-sm">Verify & Close</button>
+                <button type="submit" name="status" value="Reopened" class="btn btn-danger btn-sm">Fail & Reopen</button>
+              {% elif bug.status == 'Open' %}
+                <button type="submit" name="status" value="Rejected" class="btn btn-dark btn-sm">Reject Bug</button>
+              {% else %}
+                <span class="text-muted" style="font-size: 0.8rem;">Waiting on development.</span>
+              {% endif %}
+            {% else %}
+              <span class="text-muted" style="font-size: 0.8rem;">No transitions available.</span>
+            {% endif %}
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Assignment Logs Timeline -->
+    <div class="card-custom" style="max-height: 240px; overflow-y: auto;">
+      <h5 class="fw-bold mb-3" style="font-size: 0.95rem;">Assignment History</h5>
+      {% if history %}
+        <div class="timeline-container ps-3" style="border-left-width: 1px;">
+          {% for hist in history %}
+            <div class="mb-2" style="position: relative; font-size: 0.825rem;">
+              <span class="text-muted d-block" style="font-size: 0.725rem;">{{ hist.assigned_date|date:"d M Y H:i" }}</span>
+              Assigned to <strong>{{ hist.assigned_to.username }}</strong> by {{ hist.assigned_by.username }}
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-muted mb-0" style="font-size: 0.8rem;">No assignment logs yet.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
