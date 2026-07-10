@@ -1,0 +1,8 @@
+# Local development requirements (Windows / SQLite)
+# psycopg2-binary is NOT needed locally — we use SQLite for development
+# Use this file: pip install -r requirements-local.txt
+
+Django==5.1.4
+pillow==11.1.0
+whitenoise==6.8.2
+sqlparse==0.5.3
