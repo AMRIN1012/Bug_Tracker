@@ -8,6 +8,10 @@ from django.db.models import Q, Count
 from django.http import JsonResponse, HttpResponseForbidden
 from django.utils import timezone
 from django.contrib import messages
+import os
+import sys
+import subprocess
+import ast
 
 from .models import (
     UserProfile, Bug, BugAttachment, Comment, Notification, 
@@ -16,9 +20,13 @@ from .models import (
     STATUS_OPEN, STATUS_ASSIGNED, STATUS_IN_PROGRESS, STATUS_RESOLVED,
     STATUS_TESTING, STATUS_CLOSED, STATUS_REOPENED, STATUS_REJECTED,
     PRIORITY_LOW, PRIORITY_MEDIUM, PRIORITY_HIGH, PRIORITY_CRITICAL,
-    STATUS_CHOICES, PRIORITY_CHOICES, SEVERITY_CHOICES, BUG_TYPE_CHOICES
+    STATUS_CHOICES, PRIORITY_CHOICES, SEVERITY_CHOICES, BUG_TYPE_CHOICES,
+    DeveloperIssue, DeveloperIssueAttachment, DeveloperIssueComment, DeveloperIssueActivity
 )
-from .forms import RegistrationForm, LoginForm, BugForm, CommentForm, UserProfileForm
+from .forms import (
+    RegistrationForm, LoginForm, BugForm, CommentForm, UserProfileForm,
+    DeveloperIssueForm, DeveloperIssueCommentForm
+)
 
 # Helpers for logging and notifications
 def log_activity(user, action, bug=None, details=None):
@@ -149,23 +157,21 @@ def dashboard_view(request):
     user = request.user
     role = user.profile.role
 
-    # Apply role filtration for developer dashboard scope
+    # General dashboard stats
     if role == ROLE_DEVELOPER:
         bugs_qs = Bug.objects.filter(assigned_to=user)
     else:
         bugs_qs = Bug.objects.all()
 
-    # Metric counts
     total_bugs = bugs_qs.count()
     open_bugs = bugs_qs.filter(status=STATUS_OPEN).count()
     assigned_bugs = bugs_qs.filter(status=STATUS_ASSIGNED).count()
     in_progress_bugs = bugs_qs.filter(status=STATUS_IN_PROGRESS).count()
     resolved_bugs = bugs_qs.filter(status=STATUS_RESOLVED).count()
     closed_bugs = bugs_qs.filter(status=STATUS_CLOSED).count()
-    reopened_bugs = bugs_qs.filter(status=STATUS_REOPENED).count()
     critical_bugs = bugs_qs.filter(priority=PRIORITY_CRITICAL).count()
 
-    # Recent Activity logs
+    # Recent activity logs
     if role == ROLE_ADMIN:
         recent_activities = ActivityLog.objects.all()[:10]
     else:
@@ -173,14 +179,13 @@ def dashboard_view(request):
             Q(user=user) | Q(bug__assigned_to=user) | Q(bug__created_by=user)
         )[:10]
 
-    # Data for charts (Breakdown of ALL bugs to give admin/team view, or user-specific if Developer)
+    # Priority and status chart breakdowns
     priority_counts = bugs_qs.values('priority').annotate(count=Count('id'))
     status_counts = bugs_qs.values('status').annotate(count=Count('id'))
-
     priority_data = {item['priority']: item['count'] for item in priority_counts}
     status_data = {item['status']: item['count'] for item in status_counts}
 
-    # Monthly statistics for last 6 months
+    # Monthly report trends (6 months)
     monthly_reports = []
     current_date = timezone.now()
     for i in range(5, -1, -1):
@@ -192,6 +197,68 @@ def dashboard_view(request):
         ).count()
         monthly_reports.append({'month': month_name, 'count': month_bugs})
 
+    # --- Role-specific metrics for Developer & Tester workflow ---
+    dev_metrics = {}
+    tester_metrics = {}
+    today = timezone.now().date()
+
+    if role == ROLE_DEVELOPER:
+        # Developer dashboard data
+        dev_bugs_projects = set(Bug.objects.filter(assigned_to=user).values_list('project_name', flat=True).distinct())
+        dev_issue_projects = set(DeveloperIssue.objects.filter(developer=user).values_list('project_name', flat=True).distinct())
+        assigned_projects = sorted(list(dev_bugs_projects.union(dev_issue_projects)))
+
+        open_issues_count = DeveloperIssue.objects.filter(
+            developer=user
+        ).exclude(tester_status=DeveloperIssue.TESTER_STATUS_COMPLETED).count()
+
+        completed_tasks_count = DeveloperIssue.objects.filter(
+            developer=user,
+            tester_status=DeveloperIssue.TESTER_STATUS_COMPLETED
+        ).count()
+
+        recently_updated_issues = DeveloperIssue.objects.filter(
+            developer=user
+        ).order_by('-updated_at')[:5]
+
+        dev_metrics = {
+            'assigned_projects': assigned_projects,
+            'open_issues_count': open_issues_count,
+            'completed_tasks_count': completed_tasks_count,
+            'recently_updated_issues': recently_updated_issues,
+        }
+
+    elif role == ROLE_TESTER:
+        # Tester dashboard data
+        assigned_issues = DeveloperIssue.objects.filter(tester=user)
+        assigned_issues_count = assigned_issues.count()
+        
+        pending_verification_count = DeveloperIssue.objects.filter(
+            tester_status__in=[DeveloperIssue.TESTER_STATUS_PENDING, DeveloperIssue.TESTER_STATUS_TESTING]
+        ).count()
+
+        fixed_today_count = DeveloperIssue.objects.filter(
+            tester_status=DeveloperIssue.TESTER_STATUS_FIXED,
+            updated_at__date=today
+        ).count()
+
+        failed_test_cases_count = DeveloperIssue.objects.filter(
+            tester_status=DeveloperIssue.TESTER_STATUS_REJECTED
+        ).count()
+
+        recently_resolved_issues = DeveloperIssue.objects.filter(
+            tester_status=DeveloperIssue.TESTER_STATUS_COMPLETED
+        ).order_by('-updated_at')[:5]
+
+        tester_metrics = {
+            'assigned_issues_count': assigned_issues_count,
+            'assigned_issues': assigned_issues[:5],
+            'pending_verification_count': pending_verification_count,
+            'fixed_today_count': fixed_today_count,
+            'failed_test_cases_count': failed_test_cases_count,
+            'recently_resolved_issues': recently_resolved_issues,
+        }
+
     context = {
         'total_bugs': total_bugs,
         'open_bugs': open_bugs,
@@ -199,12 +266,14 @@ def dashboard_view(request):
         'in_progress_bugs': in_progress_bugs,
         'resolved_bugs': resolved_bugs,
         'closed_bugs': closed_bugs,
-        'reopened_bugs': reopened_bugs,
         'critical_bugs': critical_bugs,
         'recent_activities': recent_activities,
         'priority_data': priority_data,
         'status_data': status_data,
         'monthly_reports': monthly_reports,
+        'dev_metrics': dev_metrics,
+        'tester_metrics': tester_metrics,
+        'role': role,
     }
     return render(request, 'tracker/dashboard.html', context)
 
@@ -772,3 +841,504 @@ def analytics_view(request):
         'dev_performance': dev_performance,
     }
     return render(request, 'tracker/analytics.html', context)
+
+
+# --- Developer Issues Module ---
+
+@login_required
+def dev_issue_list_view(request):
+    user = request.user
+    role = user.profile.role
+
+    if role == ROLE_DEVELOPER:
+        issues_qs = DeveloperIssue.objects.filter(developer=user)
+    elif role == ROLE_TESTER:
+        # Testers see only issues assigned to them, or unassigned issues, or all developer issues
+        # Requirement: "All issues submitted by developers should automatically appear here."
+        issues_qs = DeveloperIssue.objects.all()
+    else:
+        issues_qs = DeveloperIssue.objects.all()
+
+    # Search query
+    q = request.GET.get('q', '')
+    if q:
+        issues_qs = issues_qs.filter(
+            Q(project_name__icontains=q) |
+            Q(current_task__icontains=q) |
+            Q(error_encountered__icontains=q) |
+            Q(error_description__icontains=q)
+        )
+
+    # Filter by Project, Developer, Priority, or Status
+    project_filter = request.GET.get('project_name', '')
+    developer_filter = request.GET.get('developer', '')
+    priority_filter = request.GET.get('priority', '')
+    status_filter = request.GET.get('status', '')
+
+    if project_filter:
+        issues_qs = issues_qs.filter(project_name__iexact=project_filter)
+    if developer_filter:
+        issues_qs = issues_qs.filter(developer_id=developer_filter)
+    if priority_filter:
+        issues_qs = issues_qs.filter(priority=priority_filter)
+    if status_filter:
+        issues_qs = issues_qs.filter(tester_status=status_filter)
+
+    # Distinct values for filters
+    projects = DeveloperIssue.objects.values_list('project_name', flat=True).distinct()
+    developers = User.objects.filter(profile__role=ROLE_DEVELOPER, is_active=True)
+    
+    context = {
+        'issues': issues_qs,
+        'projects': projects,
+        'developers': developers,
+        'q': q,
+        'selected_project': project_filter,
+        'selected_developer': developer_filter,
+        'selected_priority': priority_filter,
+        'selected_status': status_filter,
+        'priorities': [p[0] for p in PRIORITY_CHOICES],
+        'statuses': [s[0] for s in DeveloperIssue.TESTER_STATUS_CHOICES],
+    }
+    return render(request, 'tracker/dev_issue_list.html', context)
+
+
+@login_required
+def dev_issue_create_view(request):
+    if request.user.profile.role != ROLE_DEVELOPER and request.user.profile.role != ROLE_ADMIN:
+        raise PermissionDenied("Only developers can create project status/issues.")
+
+    if request.method == 'POST':
+        form = DeveloperIssueForm(request.POST)
+        if form.is_valid():
+            issue = form.save(commit=False)
+            issue.developer = request.user
+            issue.save()
+
+            # Record activity log
+            DeveloperIssueActivity.objects.create(
+                developer_issue=issue,
+                user=request.user,
+                action="Created",
+                details=f"Developer {request.user.username} created this issue with status '{issue.status}'."
+            )
+
+            # Notify all Testers
+            testers = User.objects.filter(profile__role=ROLE_TESTER, is_active=True)
+            for tester in testers:
+                Notification.objects.create(
+                    recipient=tester,
+                    sender=request.user,
+                    bug=None,
+                    message=f"New issue {issue.issue_id} created by developer {request.user.first_name or request.user.username}."
+                )
+
+            messages.success(request, f"Issue {issue.issue_id} successfully created!")
+            return redirect('dev_issue_detail', pk=issue.pk)
+    else:
+        form = DeveloperIssueForm()
+
+    return render(request, 'tracker/dev_issue_form.html', {'form': form, 'title': 'Create Developer Issue'})
+
+
+@login_required
+def dev_issue_edit_view(request, pk):
+    issue = get_object_or_404(DeveloperIssue, pk=pk)
+    
+    if request.user.profile.role == ROLE_DEVELOPER and issue.developer != request.user:
+        raise PermissionDenied("You can only edit your own issues.")
+    
+    if request.method == 'POST':
+        form = DeveloperIssueForm(request.POST, instance=issue)
+        if form.is_valid():
+            issue = form.save()
+            
+            # Record activity log
+            DeveloperIssueActivity.objects.create(
+                developer_issue=issue,
+                user=request.user,
+                action="Updated",
+                details="Issue details were updated by the developer."
+            )
+
+            # Notify assigned tester if exists
+            if issue.tester:
+                Notification.objects.create(
+                    recipient=issue.tester,
+                    sender=request.user,
+                    bug=None,
+                    message=f"Developer {request.user.username} updated issue {issue.issue_id} details."
+                )
+            else:
+                # Notify all Testers
+                testers = User.objects.filter(profile__role=ROLE_TESTER, is_active=True)
+                for tester in testers:
+                    Notification.objects.create(
+                        recipient=tester,
+                        sender=request.user,
+                        bug=None,
+                        message=f"Developer {request.user.username} updated issue {issue.issue_id}."
+                    )
+
+            messages.success(request, f"Issue {issue.issue_id} successfully updated!")
+            return redirect('dev_issue_detail', pk=issue.pk)
+    else:
+        form = DeveloperIssueForm(instance=issue)
+
+    return render(request, 'tracker/dev_issue_form.html', {'form': form, 'title': f'Edit Issue {issue.issue_id}', 'issue': issue})
+
+
+@login_required
+def dev_issue_detail_view(request, pk):
+    issue = get_object_or_404(DeveloperIssue, pk=pk)
+    
+    if request.user.profile.role == ROLE_DEVELOPER and issue.developer != request.user:
+        raise PermissionDenied("You can only view your own issues.")
+    
+    # Handle Comment creation
+    if request.method == 'POST' and 'comment_submit' in request.POST:
+        comment_form = DeveloperIssueCommentForm(request.POST)
+        if comment_form.is_valid():
+            comment = comment_form.save(commit=False)
+            comment.developer_issue = issue
+            comment.user = request.user
+            comment.save()
+
+            # Record activity log
+            DeveloperIssueActivity.objects.create(
+                developer_issue=issue,
+                user=request.user,
+                action="Commented",
+                details=f"Added comment: '{comment.comment_text[:50]}...'"
+            )
+
+            # Notify the other party
+            recipient = None
+            if request.user == issue.developer:
+                recipient = issue.tester
+            else:
+                recipient = issue.developer
+
+            if recipient:
+                Notification.objects.create(
+                    recipient=recipient,
+                    sender=request.user,
+                    bug=None,
+                    message=f"{request.user.username} commented on issue {issue.issue_id}."
+                )
+
+            messages.success(request, "Comment added successfully!")
+            return redirect('dev_issue_detail', pk=issue.pk)
+    else:
+        comment_form = DeveloperIssueCommentForm()
+
+    comments = issue.comments.all()
+    activities = issue.activities.all()
+    attachments = issue.attachments.all()
+
+    context = {
+        'issue': issue,
+        'comment_form': comment_form,
+        'comments': comments,
+        'activities': activities,
+        'attachments': attachments,
+        'tester_statuses': DeveloperIssue.TESTER_STATUS_CHOICES,
+    }
+    return render(request, 'tracker/dev_issue_detail.html', context)
+
+
+@login_required
+def dev_issue_tester_status_view(request, pk):
+    if request.user.profile.role not in [ROLE_TESTER, ROLE_ADMIN]:
+        return HttpResponseForbidden("Access Denied")
+
+    issue = get_object_or_404(DeveloperIssue, pk=pk)
+
+    if request.method == 'POST':
+        action_type = request.POST.get('action_type')
+
+        if action_type == 'assign':
+            issue.tester = request.user
+            issue.tester_status = DeveloperIssue.TESTER_STATUS_TESTING
+            issue.save()
+
+            DeveloperIssueActivity.objects.create(
+                developer_issue=issue,
+                user=request.user,
+                action="Started Testing",
+                details=f"Tester {request.user.username} self-assigned this issue and started testing."
+            )
+
+            Notification.objects.create(
+                recipient=issue.developer,
+                sender=request.user,
+                bug=None,
+                message=f"Tester {request.user.username} started working on issue {issue.issue_id}."
+            )
+            messages.success(request, "Issue successfully assigned and marked as Testing!")
+
+        elif action_type == 'status_change':
+            new_status = request.POST.get('tester_status')
+            old_status = issue.tester_status
+            if new_status in dict(DeveloperIssue.TESTER_STATUS_CHOICES):
+                issue.tester_status = new_status
+                if not issue.tester:
+                    issue.tester = request.user
+                issue.save()
+
+                DeveloperIssueActivity.objects.create(
+                    developer_issue=issue,
+                    user=request.user,
+                    action="Status Changed",
+                    details=f"Tester changed status from '{old_status}' to '{new_status}'."
+                )
+
+                msg = f"Issue {issue.issue_id} status updated to {new_status} by tester {request.user.username}."
+                if new_status == DeveloperIssue.TESTER_STATUS_MORE_INFO:
+                    msg = f"Tester {request.user.username} requests more information on issue {issue.issue_id}."
+                elif new_status == DeveloperIssue.TESTER_STATUS_FIXED:
+                    msg = f"Tester {request.user.username} marked issue {issue.issue_id} as Fixed."
+                elif new_status == DeveloperIssue.TESTER_STATUS_COMPLETED:
+                    msg = f"Testing completed for issue {issue.issue_id} and marked as Completed."
+
+                Notification.objects.create(
+                    recipient=issue.developer,
+                    sender=request.user,
+                    bug=None,
+                    message=msg
+                )
+                messages.success(request, f"Status successfully updated to '{new_status}'!")
+        
+        elif action_type == 'resolve':
+            old_status = issue.tester_status
+            issue.tester_status = DeveloperIssue.TESTER_STATUS_COMPLETED
+            issue.save()
+
+            DeveloperIssueActivity.objects.create(
+                developer_issue=issue,
+                user=request.user,
+                action="Resolved",
+                details="Issue marked as resolved after verification."
+            )
+
+            Notification.objects.create(
+                recipient=issue.developer,
+                sender=request.user,
+                bug=None,
+                message=f"Issue {issue.issue_id} has been verified and marked as Completed by {request.user.username}."
+            )
+            messages.success(request, "Issue successfully resolved!")
+
+    return redirect('dev_issue_detail', pk=issue.pk)
+
+
+@login_required
+def dev_issue_upload_attachment(request, pk):
+    issue = get_object_or_404(DeveloperIssue, pk=pk)
+    
+    if request.method == 'POST' and request.FILES.get('file'):
+        uploaded_file = request.FILES.get('file')
+        attachment = DeveloperIssueAttachment.objects.create(
+            developer_issue=issue,
+            file=uploaded_file
+        )
+
+        DeveloperIssueActivity.objects.create(
+            developer_issue=issue,
+            user=request.user,
+            action="Attachment Uploaded",
+            details=f"Uploaded file: {attachment.filename}"
+        )
+
+        recipient = issue.tester if request.user == issue.developer else issue.developer
+        if recipient:
+            Notification.objects.create(
+                recipient=recipient,
+                sender=request.user,
+                bug=None,
+                message=f"{request.user.username} uploaded an attachment for issue {issue.issue_id}."
+            )
+
+        messages.success(request, "Attachment uploaded successfully!")
+    else:
+        messages.error(request, "No file was uploaded.")
+
+    return redirect('dev_issue_detail', pk=issue.pk)
+
+
+# --- Built-in IDE views ---
+
+from django.conf import settings
+
+def build_file_tree(dir_path, root_path):
+    tree = []
+    try:
+        for entry in sorted(os.scandir(dir_path), key=lambda e: (not e.is_dir(), e.name.lower())):
+            if entry.name in ['.git', '__pycache__', 'venv', '.venv', 'db.sqlite3', '.agents', '.gemini', 'node_modules', 'static', 'media', 'bugtracker_project.egg-info']:
+                continue
+            rel_path = os.path.relpath(entry.path, root_path).replace('\\', '/')
+            node = {
+                'name': entry.name,
+                'path': rel_path,
+                'is_dir': entry.is_dir(),
+            }
+            if entry.is_dir():
+                node['children'] = build_file_tree(entry.path, root_path)
+            tree.append(node)
+    except Exception:
+        pass
+    return tree
+
+@login_required
+def ide_view(request):
+    if request.user.profile.role not in [ROLE_TESTER, ROLE_ADMIN]:
+        raise PermissionDenied("Only Testers and Admins can access the browser IDE.")
+    return render(request, 'tracker/ide.html')
+
+@login_required
+def ide_api_files(request):
+    if request.user.profile.role not in [ROLE_TESTER, ROLE_ADMIN]:
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+    root = settings.BASE_DIR
+    tree = build_file_tree(root, root)
+    return JsonResponse({'tree': tree})
+
+@login_required
+def ide_api_read_file(request):
+    if request.user.profile.role not in [ROLE_TESTER, ROLE_ADMIN]:
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+    rel_path = request.GET.get('path', '')
+    if not rel_path:
+        return JsonResponse({'error': 'Path is required'}, status=400)
+    
+    target_path = os.path.abspath(os.path.join(settings.BASE_DIR, rel_path))
+    if not target_path.startswith(os.path.abspath(settings.BASE_DIR)):
+        return JsonResponse({'error': 'Directory traversal blocked'}, status=403)
+    
+    if not os.path.exists(target_path) or os.path.isdir(target_path):
+        return JsonResponse({'error': 'File not found'}, status=404)
+        
+    try:
+        with open(target_path, 'r', encoding='utf-8', errors='replace') as f:
+            content = f.read()
+        return JsonResponse({'content': content})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+def ide_api_write_file(request):
+    if request.user.profile.role not in [ROLE_TESTER, ROLE_ADMIN]:
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=400)
+        
+    rel_path = request.POST.get('path', '')
+    content = request.POST.get('content', '')
+    if not rel_path:
+        return JsonResponse({'error': 'Path is required'}, status=400)
+        
+    target_path = os.path.abspath(os.path.join(settings.BASE_DIR, rel_path))
+    if not target_path.startswith(os.path.abspath(settings.BASE_DIR)):
+        return JsonResponse({'error': 'Directory traversal blocked'}, status=403)
+        
+    try:
+        with open(target_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+def ide_api_run_code(request):
+    if request.user.profile.role not in [ROLE_TESTER, ROLE_ADMIN]:
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=400)
+        
+    rel_path = request.POST.get('path', '')
+    if not rel_path:
+        return JsonResponse({'error': 'Path is required'}, status=400)
+        
+    target_path = os.path.abspath(os.path.join(settings.BASE_DIR, rel_path))
+    if not target_path.startswith(os.path.abspath(settings.BASE_DIR)):
+        return JsonResponse({'error': 'Directory traversal blocked'}, status=403)
+        
+    try:
+        result = subprocess.run(
+            [sys.executable, target_path],
+            cwd=settings.BASE_DIR,
+            capture_output=True,
+            text=True,
+            timeout=8
+        )
+        return JsonResponse({
+            'stdout': result.stdout,
+            'stderr': result.stderr,
+            'exit_code': result.returncode
+        })
+    except subprocess.TimeoutExpired:
+        return JsonResponse({'error': 'Process execution exceeded 8 seconds timeout.'}, status=500)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+def ide_api_build(request):
+    if request.user.profile.role not in [ROLE_TESTER, ROLE_ADMIN]:
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=400)
+        
+    rel_path = request.POST.get('path', '')
+    if not rel_path:
+        return JsonResponse({'error': 'Path is required'}, status=400)
+        
+    target_path = os.path.abspath(os.path.join(settings.BASE_DIR, rel_path))
+    if not target_path.startswith(os.path.abspath(settings.BASE_DIR)):
+        return JsonResponse({'error': 'Directory traversal blocked'}, status=403)
+        
+    try:
+        with open(target_path, 'r', encoding='utf-8', errors='replace') as f:
+            code = f.read()
+        
+        if target_path.endswith('.py'):
+            ast.parse(code)
+            return JsonResponse({'success': True, 'diagnostics': []})
+        else:
+            return JsonResponse({'success': True, 'info': 'Non-python file syntax check bypassed.'})
+    except SyntaxError as e:
+        return JsonResponse({
+            'success': False,
+            'diagnostics': [{
+                'line': e.lineno,
+                'offset': e.offset,
+                'text': e.msg,
+                'code': e.text
+            }]
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+def ide_api_test(request):
+    if request.user.profile.role not in [ROLE_TESTER, ROLE_ADMIN]:
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=400)
+        
+    try:
+        result = subprocess.run(
+            [sys.executable, 'manage.py', 'test'],
+            cwd=settings.BASE_DIR,
+            capture_output=True,
+            text=True,
+            timeout=25
+        )
+        output = result.stdout + "\n" + result.stderr
+        return JsonResponse({
+            'output': output,
+            'exit_code': result.returncode
+        })
+    except subprocess.TimeoutExpired:
+        return JsonResponse({'error': 'Django tests exceeded 25 seconds timeout.'}, status=500)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)

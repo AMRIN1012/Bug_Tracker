@@ -209,3 +209,102 @@ class AssignmentHistory(models.Model):
 
     class Meta:
         ordering = ['-assigned_date']
+
+
+class DeveloperIssue(models.Model):
+    STATUS_IN_PROGRESS = 'In Progress'
+    STATUS_COMPLETED = 'Completed'
+    STATUS_BLOCKED = 'Blocked'
+    DEV_STATUS_CHOICES = [
+        (STATUS_IN_PROGRESS, 'In Progress'),
+        (STATUS_COMPLETED, 'Completed'),
+        (STATUS_BLOCKED, 'Blocked'),
+    ]
+
+    TESTER_STATUS_PENDING = 'Pending'
+    TESTER_STATUS_TESTING = 'Testing'
+    TESTER_STATUS_FIXED = 'Fixed'
+    TESTER_STATUS_REJECTED = 'Rejected'
+    TESTER_STATUS_MORE_INFO = 'Need More Info'
+    TESTER_STATUS_COMPLETED = 'Completed'
+    TESTER_STATUS_CHOICES = [
+        (TESTER_STATUS_PENDING, 'Pending'),
+        (TESTER_STATUS_TESTING, 'Testing'),
+        (TESTER_STATUS_FIXED, 'Fixed'),
+        (TESTER_STATUS_REJECTED, 'Rejected'),
+        (TESTER_STATUS_MORE_INFO, 'Need More Info'),
+        (TESTER_STATUS_COMPLETED, 'Completed'),
+    ]
+
+    issue_id = models.CharField(max_length=20, unique=True, blank=True)
+    developer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='developer_issues')
+    project_name = models.CharField(max_length=100)
+    current_task = models.CharField(max_length=255)
+    status = models.CharField(max_length=20, choices=DEV_STATUS_CHOICES, default=STATUS_IN_PROGRESS)
+    error_encountered = models.CharField(max_length=255)
+    error_description = models.TextField()
+    files_affected = models.TextField()
+    expected_solution = models.TextField(blank=True, null=True)
+    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default=PRIORITY_MEDIUM)
+    tester = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_developer_issues')
+    tester_status = models.CharField(max_length=20, choices=TESTER_STATUS_CHOICES, default=TESTER_STATUS_PENDING)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if not self.issue_id:
+            count = DeveloperIssue.objects.count() + 1
+            self.issue_id = f"DEV-{1000 + count}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.issue_id} - {self.error_encountered}"
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+class DeveloperIssueAttachment(models.Model):
+    developer_issue = models.ForeignKey(DeveloperIssue, on_delete=models.CASCADE, related_name='attachments')
+    file = models.FileField(upload_to='developer_issue_attachments/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Attachment for {self.developer_issue.issue_id}"
+
+    @property
+    def filename(self):
+        return self.file.name.split('/')[-1]
+
+    @property
+    def is_image(self):
+        name = self.file.name.lower()
+        return name.endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))
+
+
+class DeveloperIssueComment(models.Model):
+    developer_issue = models.ForeignKey(DeveloperIssue, on_delete=models.CASCADE, related_name='comments')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    comment_text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Comment by {self.user.username} on {self.developer_issue.issue_id}"
+
+    class Meta:
+        ordering = ['created_at']
+
+
+class DeveloperIssueActivity(models.Model):
+    developer_issue = models.ForeignKey(DeveloperIssue, on_delete=models.CASCADE, related_name='activities')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    action = models.CharField(max_length=100)
+    details = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.action} on {self.developer_issue.issue_id}"
+
+    class Meta:
+        ordering = ['-created_at']

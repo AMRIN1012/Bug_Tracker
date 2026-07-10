@@ -3,159 +3,386 @@
 {% block page_title %}Dashboard Overview{% endblock %}
 
 {% block content %}
-<!-- Metrics Cards Row -->
-<div class="row">
-  <!-- Total Bugs -->
-  <div class="col-sm-6 col-lg-3">
-    <div class="card-custom metric-card">
-      <div class="metric-info">
-        <h5>Total Bugs</h5>
-        <h2>{{ total_bugs }}</h2>
-      </div>
-      <div class="metric-icon bg-light-primary text-primary" style="background-color: rgba(79, 70, 229, 0.1);">
-        <i class="bi bi-bug"></i>
-      </div>
-    </div>
-  </div>
-
-  <!-- Open Bugs -->
-  <div class="col-sm-6 col-lg-3">
-    <div class="card-custom metric-card">
-      <div class="metric-info">
-        <h5>Open</h5>
-        <h2>{{ open_bugs }}</h2>
-      </div>
-      <div class="metric-icon text-success" style="background-color: rgba(25, 135, 84, 0.1);">
-        <i class="bi bi-folder2-open"></i>
-      </div>
-    </div>
-  </div>
-
-  <!-- In Progress Bugs -->
-  <div class="col-sm-6 col-lg-3">
-    <div class="card-custom metric-card">
-      <div class="metric-info">
-        <h5>In Progress</h5>
-        <h2>{{ in_progress_bugs }}</h2>
-      </div>
-      <div class="metric-icon text-warning" style="background-color: rgba(255, 193, 7, 0.1);">
-        <i class="bi bi-play-circle"></i>
-      </div>
-    </div>
-  </div>
-
-  <!-- Critical Bugs -->
-  <div class="col-sm-6 col-lg-3">
-    <div class="card-custom metric-card">
-      <div class="metric-info">
-        <h5>Critical</h5>
-        <h2>{{ critical_bugs }}</h2>
-      </div>
-      <div class="metric-icon text-danger" style="background-color: rgba(220, 53, 69, 0.1);">
-        <i class="bi bi-exclamation-triangle"></i>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Workflow states secondary metrics row -->
-<div class="row mb-4">
-  <div class="col-12">
-    <div class="card-custom p-3 border-0 bg-opacity-10" style="background-color: var(--card-bg);">
-      <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 px-2">
-        <div class="text-center">
-          <span class="text-muted d-block" style="font-size: 0.8rem; font-weight:600;">ASSIGNED</span>
-          <span class="fw-bold fs-5 text-primary">{{ assigned_bugs }}</span>
+{% if role == 'Developer' %}
+  <!-- Developer Dashboard -->
+  <div class="row mb-4">
+    <!-- Assigned Projects -->
+    <div class="col-md-4">
+      <div class="card-custom metric-card">
+        <div class="metric-info">
+          <h5>Assigned Projects</h5>
+          <h2>{{ dev_metrics.assigned_projects|length }}</h2>
         </div>
-        <div class="vr" style="background-color: var(--border-color);"></div>
-        <div class="text-center">
-          <span class="text-muted d-block" style="font-size: 0.8rem; font-weight:600;">RESOLVED</span>
-          <span class="fw-bold fs-5 text-success">{{ resolved_bugs }}</span>
+        <div class="metric-icon bg-light-primary text-primary" style="background-color: rgba(79, 70, 229, 0.1);">
+          <i class="bi bi-folder-check"></i>
         </div>
-        <div class="vr" style="background-color: var(--border-color);"></div>
-        <div class="text-center">
-          <span class="text-muted d-block" style="font-size: 0.8rem; font-weight:600;">CLOSED</span>
-          <span class="fw-bold fs-5 text-dark-emphasis">{{ closed_bugs }}</span>
+      </div>
+    </div>
+    
+    <!-- Open Issues -->
+    <div class="col-md-4">
+      <div class="card-custom metric-card">
+        <div class="metric-info">
+          <h5>Open Issues</h5>
+          <h2>{{ dev_metrics.open_issues_count }}</h2>
         </div>
-        <div class="vr" style="background-color: var(--border-color);"></div>
-        <div class="text-center">
-          <span class="text-muted d-block" style="font-size: 0.8rem; font-weight:600;">REOPENED</span>
-          <span class="fw-bold fs-5 text-danger">{{ reopened_bugs }}</span>
+        <div class="metric-icon text-warning" style="background-color: rgba(255, 193, 7, 0.1);">
+          <i class="bi bi-exclamation-circle-fill"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Completed Tasks -->
+    <div class="col-md-4">
+      <div class="card-custom metric-card">
+        <div class="metric-info">
+          <h5>Completed Tasks</h5>
+          <h2>{{ dev_metrics.completed_tasks_count }}</h2>
+        </div>
+        <div class="metric-icon text-success" style="background-color: rgba(25, 135, 84, 0.1);">
+          <i class="bi bi-check-circle-fill"></i>
         </div>
       </div>
     </div>
   </div>
-</div>
 
-<!-- Charts & Visuals Section -->
-<div class="row">
-  <div class="col-lg-8">
-    <div class="card-custom">
-      <h5 class="card-title fw-bold mb-4">Monthly Bug Reports</h5>
-      <div style="position: relative; height: 300px;">
-        <canvas id="monthlyTrendChart"></canvas>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-lg-4">
-    <div class="card-custom">
-      <h5 class="card-title fw-bold mb-4">Bugs by Status</h5>
-      <div style="position: relative; height: 300px; display: flex; align-items: center; justify-content: center;">
-        <canvas id="statusChart"></canvas>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="row">
-  <!-- Priority Analysis Chart -->
-  <div class="col-lg-4">
-    <div class="card-custom">
-      <h5 class="card-title fw-bold mb-4">Bugs by Priority</h5>
-      <div style="position: relative; height: 260px; display: flex; align-items: center; justify-content: center;">
-        <canvas id="priorityChart"></canvas>
-      </div>
-    </div>
-  </div>
-
-  <!-- Recent Activity log -->
-  <div class="col-lg-8">
-    <div class="card-custom" style="min-height: 324px;">
-      <div class="d-flex align-items-center justify-content-between mb-4">
-        <h5 class="card-title fw-bold m-0">Recent Activity</h5>
-        <a href="{% url 'activity_logs' %}" class="btn btn-sm btn-link text-primary text-decoration-none">View All Logs</a>
-      </div>
-
-      <div class="timeline-container">
-        {% if recent_activities %}
-          {% for log in recent_activities %}
-            <div class="timeline-item">
-              <span class="timeline-timestamp">{{ log.created_at|timesince }} ago</span>
-              <div class="timeline-title">
-                {{ log.action }}
-                {% if log.bug %}
-                  - <a href="{% url 'bug_detail' log.bug.pk %}" class="text-primary text-decoration-none">{{ log.bug.title }}</a>
-                {% endif %}
+  <div class="row">
+    <!-- Left Column: Assigned Projects & Recent Issues -->
+    <div class="col-lg-7 mb-4">
+      <!-- Assigned Projects list -->
+      <div class="card-custom mb-4">
+        <h5 class="card-title fw-bold mb-3">Assigned Projects</h5>
+        <div class="list-group list-group-flush bg-transparent">
+          {% if dev_metrics.assigned_projects %}
+            {% for project in dev_metrics.assigned_projects %}
+              <div class="list-group-item bg-transparent text-main px-0 py-3 border-bottom d-flex align-items-center justify-content-between" style="border-color: var(--border-color) !important;">
+                <div class="d-flex align-items-center gap-3">
+                  <i class="bi bi-folder2 text-primary fs-5"></i>
+                  <div>
+                    <strong class="d-block">{{ project }}</strong>
+                  </div>
+                </div>
+                <span class="badge bg-primary rounded px-2">Active</span>
               </div>
-              <div class="timeline-details text-muted">
-                {{ log.details|default:"" }} <span class="fw-semibold">by {{ log.user.username }}</span>
+            {% endfor %}
+          {% else %}
+            <p class="text-muted text-center py-4">No active projects assigned.</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Recently Updated Issues -->
+      <div class="card-custom">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <h5 class="card-title fw-bold m-0">Recently Updated Issues</h5>
+          <a href="{% url 'dev_issue_list' %}" class="btn btn-sm btn-link text-primary text-decoration-none">View All</a>
+        </div>
+        <div class="list-group list-group-flush bg-transparent">
+          {% if dev_metrics.recently_updated_issues %}
+            {% for issue in dev_metrics.recently_updated_issues %}
+              <a href="{% url 'dev_issue_detail' issue.pk %}" class="list-group-item list-group-item-action bg-transparent text-main px-0 py-3 border-bottom d-flex align-items-center justify-content-between text-decoration-none" style="border-color: var(--border-color) !important;">
+                <div>
+                  <strong class="d-block text-primary">{{ issue.issue_id }}: {{ issue.error_encountered }}</strong>
+                  <span class="text-muted small">Updated: {{ issue.updated_at|date:"M d, H:i" }}</span>
+                </div>
+                <div>
+                  {% if issue.tester_status == 'Pending' %}
+                    <span class="badge bg-secondary text-white rounded px-2">Pending</span>
+                  {% elif issue.tester_status == 'Testing' %}
+                    <span class="badge bg-primary text-white rounded px-2">Testing</span>
+                  {% elif issue.tester_status == 'Completed' %}
+                    <span class="badge bg-success text-white rounded px-2">Completed</span>
+                  {% else %}
+                    <span class="badge bg-warning text-dark rounded px-2">{{ issue.tester_status }}</span>
+                  {% endif %}
+                </div>
+              </a>
+            {% endfor %}
+          {% else %}
+            <p class="text-muted text-center py-4">No recent updates.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Visual Monthly Trend -->
+    <div class="col-lg-5 mb-4">
+      <div class="card-custom">
+        <h5 class="card-title fw-bold mb-4">My Bug Trends</h5>
+        <div style="position: relative; height: 300px;">
+          <canvas id="monthlyTrendChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+{% elif role == 'Tester' %}
+  <!-- Tester Dashboard -->
+  <div class="row mb-4">
+    <!-- Assigned Issues -->
+    <div class="col-sm-6 col-lg-3">
+      <div class="card-custom metric-card">
+        <div class="metric-info">
+          <h5>Assigned Issues</h5>
+          <h2>{{ tester_metrics.assigned_issues_count }}</h2>
+        </div>
+        <div class="metric-icon bg-light-primary text-primary" style="background-color: rgba(79, 70, 229, 0.1);">
+          <i class="bi bi-person-workspace"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pending Verification -->
+    <div class="col-sm-6 col-lg-3">
+      <div class="card-custom metric-card">
+        <div class="metric-info">
+          <h5>Pending Verification</h5>
+          <h2>{{ tester_metrics.pending_verification_count }}</h2>
+        </div>
+        <div class="metric-icon text-warning" style="background-color: rgba(255, 193, 7, 0.1);">
+          <i class="bi bi-clock-history"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fixed Today -->
+    <div class="col-sm-6 col-lg-3">
+      <div class="card-custom metric-card">
+        <div class="metric-info">
+          <h5>Fixed Today</h5>
+          <h2>{{ tester_metrics.fixed_today_count }}</h2>
+        </div>
+        <div class="metric-icon text-success" style="background-color: rgba(25, 135, 84, 0.1);">
+          <i class="bi bi-calendar-check"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Failed Test Cases -->
+    <div class="col-sm-6 col-lg-3">
+      <div class="card-custom metric-card">
+        <div class="metric-info">
+          <h5>Failed Test Cases</h5>
+          <h2>{{ tester_metrics.failed_test_cases_count }}</h2>
+        </div>
+        <div class="metric-icon text-danger" style="background-color: rgba(220, 53, 69, 0.1);">
+          <i class="bi bi-x-circle"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <!-- Left Column: Work List & Resolved Issues -->
+    <div class="col-lg-7 mb-4">
+      <!-- Assigned Work List -->
+      <div class="card-custom mb-4">
+        <h5 class="card-title fw-bold mb-3">My Work Queue</h5>
+        <div class="list-group list-group-flush bg-transparent">
+          {% if tester_metrics.assigned_issues %}
+            {% for issue in tester_metrics.assigned_issues %}
+              <div class="list-group-item bg-transparent text-main px-0 py-3 border-bottom d-flex align-items-center justify-content-between" style="border-color: var(--border-color) !important;">
+                <div>
+                  <a href="{% url 'dev_issue_detail' issue.pk %}" class="fw-bold d-block text-decoration-none text-primary">{{ issue.issue_id }}: {{ issue.error_encountered }}</a>
+                  <span class="text-muted small">Project: {{ issue.project_name }} &bull; Priority: <strong>{{ issue.priority }}</strong></span>
+                </div>
+                <span class="badge bg-info text-white rounded px-2">{{ issue.tester_status }}</span>
               </div>
-            </div>
-          {% endfor %}
-        {% else %}
-          <div class="text-center py-5 text-muted">
-            <i class="bi bi-activity d-block mb-2" style="font-size: 2rem;"></i>
-            No logged actions yet.
+            {% endfor %}
+          {% else %}
+            <p class="text-muted text-center py-4">No issues assigned to you. Go to <a href="{% url 'dev_issue_list' %}">Developer Issues</a> to self-assign work!</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Recently Resolved Issues -->
+      <div class="card-custom">
+        <h5 class="card-title fw-bold mb-3">Recently Verified / Resolved</h5>
+        <div class="list-group list-group-flush bg-transparent">
+          {% if tester_metrics.recently_resolved_issues %}
+            {% for issue in tester_metrics.recently_resolved_issues %}
+              <div class="list-group-item bg-transparent text-main px-0 py-3 border-bottom d-flex align-items-center justify-content-between" style="border-color: var(--border-color) !important;">
+                <div>
+                  <a href="{% url 'dev_issue_detail' issue.pk %}" class="fw-bold d-block text-decoration-none text-success"><i class="bi bi-check-circle me-1"></i> {{ issue.issue_id }}: {{ issue.error_encountered }}</a>
+                  <span class="text-muted small">Verified on {{ issue.updated_at|date:"M d, H:i" }}</span>
+                </div>
+                <span class="badge bg-success rounded px-2">Verified</span>
+              </div>
+            {% endfor %}
+          {% else %}
+            <p class="text-muted text-center py-4">No recently resolved issues.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Visual Monthly Trend -->
+    <div class="col-lg-5 mb-4">
+      <div class="card-custom">
+        <h5 class="card-title fw-bold mb-4">Quality System Trend</h5>
+        <div style="position: relative; height: 300px;">
+          <canvas id="monthlyTrendChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+{% else %}
+  <!-- Default / Admin Dashboard -->
+  <div class="row">
+    <!-- Total Bugs -->
+    <div class="col-sm-6 col-lg-3">
+      <div class="card-custom metric-card">
+        <div class="metric-info">
+          <h5>Total Bugs</h5>
+          <h2>{{ total_bugs }}</h2>
+        </div>
+        <div class="metric-icon bg-light-primary text-primary" style="background-color: rgba(79, 70, 229, 0.1);">
+          <i class="bi bi-bug"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Open Bugs -->
+    <div class="col-sm-6 col-lg-3">
+      <div class="card-custom metric-card">
+        <div class="metric-info">
+          <h5>Open</h5>
+          <h2>{{ open_bugs }}</h2>
+        </div>
+        <div class="metric-icon text-success" style="background-color: rgba(25, 135, 84, 0.1);">
+          <i class="bi bi-folder2-open"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- In Progress Bugs -->
+    <div class="col-sm-6 col-lg-3">
+      <div class="card-custom metric-card">
+        <div class="metric-info">
+          <h5>In Progress</h5>
+          <h2>{{ in_progress_bugs }}</h2>
+        </div>
+        <div class="metric-icon text-warning" style="background-color: rgba(255, 193, 7, 0.1);">
+          <i class="bi bi-play-circle"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Critical Bugs -->
+    <div class="col-sm-6 col-lg-3">
+      <div class="card-custom metric-card">
+        <div class="metric-info">
+          <h5>Critical</h5>
+          <h2>{{ critical_bugs }}</h2>
+        </div>
+        <div class="metric-icon text-danger" style="background-color: rgba(220, 53, 69, 0.1);">
+          <i class="bi bi-exclamation-triangle"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Workflow states secondary metrics row -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card-custom p-3 border-0 bg-opacity-10" style="background-color: var(--card-bg);">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 px-2">
+          <div class="text-center">
+            <span class="text-muted d-block" style="font-size: 0.8rem; font-weight:600;">ASSIGNED</span>
+            <span class="fw-bold fs-5 text-primary">{{ assigned_bugs }}</span>
           </div>
-        {% endif %}
+          <div class="vr" style="background-color: var(--border-color);"></div>
+          <div class="text-center">
+            <span class="text-muted d-block" style="font-size: 0.8rem; font-weight:600;">RESOLVED</span>
+            <span class="fw-bold fs-5 text-success">{{ resolved_bugs }}</span>
+          </div>
+          <div class="vr" style="background-color: var(--border-color);"></div>
+          <div class="text-center">
+            <span class="text-muted d-block" style="font-size: 0.8rem; font-weight:600;">CLOSED</span>
+            <span class="fw-bold fs-5 text-dark-emphasis">{{ closed_bugs }}</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
-</div>
+
+  <!-- Charts & Visuals Section -->
+  <div class="row">
+    <div class="col-lg-8">
+      <div class="card-custom">
+        <h5 class="card-title fw-bold mb-4">Monthly Bug Reports</h5>
+        <div style="position: relative; height: 300px;">
+          <canvas id="monthlyTrendChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="card-custom">
+        <h5 class="card-title fw-bold mb-4">Bugs by Status</h5>
+        <div style="position: relative; height: 300px; display: flex; align-items: center; justify-content: center;">
+          <canvas id="statusChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <!-- Priority Analysis Chart -->
+    <div class="col-lg-4">
+      <div class="card-custom">
+        <h5 class="card-title fw-bold mb-4">Bugs by Priority</h5>
+        <div style="position: relative; height: 260px; display: flex; align-items: center; justify-content: center;">
+          <canvas id="priorityChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Activity log -->
+    <div class="col-lg-8">
+      <div class="card-custom" style="min-height: 324px;">
+        <div class="d-flex align-items-center justify-content-between mb-4">
+          <h5 class="card-title fw-bold m-0">Recent Activity</h5>
+          <a href="{% url 'activity_logs' %}" class="btn btn-sm btn-link text-primary text-decoration-none">View All Logs</a>
+        </div>
+
+        <div class="timeline-container">
+          {% if recent_activities %}
+            {% for log in recent_activities %}
+              <div class="timeline-item">
+                <span class="timeline-timestamp">{{ log.created_at|timesince }} ago</span>
+                <div class="timeline-title">
+                  {{ log.action }}
+                  {% if log.bug %}
+                    - <a href="{% url 'bug_detail' log.bug.pk %}" class="text-primary text-decoration-none">{{ log.bug.title }}</a>
+                  {% endif %}
+                </div>
+                <div class="timeline-details text-muted">
+                  {{ log.details|default:"" }} <span class="fw-semibold">by {{ log.user.username }}</span>
+                </div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="text-center py-5 text-muted">
+              <i class="bi bi-activity d-block mb-2" style="font-size: 2rem;"></i>
+              No logged actions yet.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
+<script id="data-trend-labels" type="application/json">[{% for item in monthly_reports %}"{{ item.month }}"{% if not forloop.last %},{% endif %}{% endfor %}]</script>
+<script id="data-trend-values" type="application/json">[{% for item in monthly_reports %}{{ item.count }}{% if not forloop.last %},{% endif %}{% endfor %}]</script>
+<script id="data-status-labels" type="application/json">[{% for key, value in status_data.items %}"{{ key }}"{% if not forloop.last %},{% endif %}{% endfor %}]</script>
+<script id="data-status-values" type="application/json">[{% for key, value in status_data.items %}{{ value }}{% if not forloop.last %},{% endif %}{% endfor %}]</script>
+<script id="data-priority-labels" type="application/json">[{% for key, value in priority_data.items %}"{{ key }}"{% if not forloop.last %},{% endif %}{% endfor %}]</script>
+<script id="data-priority-values" type="application/json">[{% for key, value in priority_data.items %}{{ value }}{% if not forloop.last %},{% endif %}{% endfor %}]</script>
 <script>
   // Read theme colors dynamically from CSS variables
   function getThemeColors() {
@@ -171,8 +398,8 @@
 
   // --- Monthly Bug Trend Chart ---
   const trendCtx = document.getElementById('monthlyTrendChart').getContext('2d');
-  const trendLabels = [{% for item in monthly_reports %}"{{ item.month }}",{% endfor %}];
-  const trendData = [{% for item in monthly_reports %}{{ item.count }},{% endfor %}];
+  const trendLabels = JSON.parse(document.getElementById('data-trend-labels').textContent);
+  const trendData = JSON.parse(document.getElementById('data-trend-values').textContent);
 
   let trendChart = new Chart(trendCtx, {
     type: 'line',
@@ -210,8 +437,8 @@
 
   // --- Status Distribution Chart ---
   const statusCtx = document.getElementById('statusChart').getContext('2d');
-  const statusLabels = [{% for key, value in status_data.items %}"{{ key }}",{% endfor %}];
-  const statusVals = [{% for key, value in status_data.items %}{{ value }},{% endfor %}];
+  const statusLabels = JSON.parse(document.getElementById('data-status-labels').textContent);
+  const statusVals = JSON.parse(document.getElementById('data-status-values').textContent);
   
   // Custom colors matching status priority
   const statusColors = {
@@ -250,8 +477,8 @@
 
   // --- Priority Distribution Chart ---
   const priorityCtx = document.getElementById('priorityChart').getContext('2d');
-  const priorityLabels = [{% for key, value in priority_data.items %}"{{ key }}",{% endfor %}];
-  const priorityVals = [{% for key, value in priority_data.items %}{{ value }},{% endfor %}];
+  const priorityLabels = JSON.parse(document.getElementById('data-priority-labels').textContent);
+  const priorityVals = JSON.parse(document.getElementById('data-priority-values').textContent);
 
   const priorityColors = {
     'Low': '#166534',

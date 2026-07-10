@@ -60,3 +60,40 @@ class AssignmentHistoryAdmin(admin.ModelAdmin):
     list_display = ('bug', 'assigned_by', 'assigned_to', 'assigned_date')
     list_filter = ('assigned_date',)
     search_fields = ('bug__title', 'assigned_by__username', 'assigned_to__username')
+
+
+# Developer Issues Module
+from .models import DeveloperIssue, DeveloperIssueAttachment, DeveloperIssueComment, DeveloperIssueActivity
+
+class DeveloperIssueAttachmentInline(admin.TabularInline):
+    model = DeveloperIssueAttachment
+    extra = 0
+
+class DeveloperIssueCommentInline(admin.TabularInline):
+    model = DeveloperIssueComment
+    extra = 0
+
+class DeveloperIssueActivityInline(admin.TabularInline):
+    model = DeveloperIssueActivity
+    extra = 0
+
+@admin.register(DeveloperIssue)
+class DeveloperIssueAdmin(admin.ModelAdmin):
+    list_display = ('issue_id', 'developer', 'project_name', 'current_task', 'priority', 'status', 'tester_status', 'tester', 'created_at', 'updated_at')
+    list_filter = ('status', 'tester_status', 'priority', 'project_name')
+    search_fields = ('issue_id', 'project_name', 'error_encountered', 'current_task', 'developer__username')
+    inlines = [DeveloperIssueCommentInline, DeveloperIssueActivityInline, DeveloperIssueAttachmentInline]
+    date_hierarchy = 'created_at'
+
+@admin.register(DeveloperIssueComment)
+class DeveloperIssueCommentAdmin(admin.ModelAdmin):
+    list_display = ('developer_issue', 'user', 'comment_text', 'created_at')
+    list_filter = ('created_at',)
+    search_fields = ('comment_text', 'user__username')
+
+@admin.register(DeveloperIssueActivity)
+class DeveloperIssueActivityAdmin(admin.ModelAdmin):
+    list_display = ('developer_issue', 'user', 'action', 'details', 'created_at')
+    list_filter = ('action', 'created_at')
+    search_fields = ('action', 'details', 'user__username')
+

@@ -1,0 +1,316 @@
+{% extends 'base.html' %}
+{% block title %}Issue Details - {{ issue.issue_id }}{% endblock %}
+{% block page_title %}Issue Details - {{ issue.issue_id }}{% endblock %}
+
+{% block content %}
+<!-- Back link and primary action buttons -->
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+  <div>
+    <a href="{% url 'dev_issue_list' %}" class="btn btn-outline-secondary border-color btn-sm">
+      <i class="bi bi-arrow-left me-1"></i> Back to List
+    </a>
+  </div>
+  
+  <div class="d-flex align-items-center gap-2">
+    <!-- Open in IDE Button for Tester & Admin -->
+    {% if global_user_role == 'Tester' or global_user_role == 'Admin' %}
+      <a href="{% url 'ide' %}" class="btn btn-dark shadow-sm">
+        <i class="bi bi-code-square me-1"></i> Open Workspace IDE
+      </a>
+    {% endif %}
+
+    <!-- Edit Button for Owner/Admin -->
+    {% if global_user_role == 'Admin' or request.user == issue.developer %}
+      <a href="{% url 'dev_issue_edit' issue.pk %}" class="btn btn-outline-primary border-color">
+        <i class="bi bi-pencil me-1"></i> Edit Issue
+      </a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row">
+  <!-- Left Column: Details, description, and attachments -->
+  <div class="col-xl-8 col-lg-7 mb-4">
+    <!-- Summary Card -->
+    <div class="card border-0 shadow-sm mb-4" style="background-color: var(--card-bg);">
+      <div class="card-body p-4">
+        <div class="d-flex flex-wrap align-items-center justify-content-between border-bottom pb-3 mb-4 gap-2" style="border-color: var(--border-color) !important;">
+          <div class="d-flex align-items-center gap-2">
+            <span class="fs-4 fw-bold text-main">{{ issue.issue_id }}</span>
+            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-10 rounded-pill px-3">{{ issue.project_name }}</span>
+          </div>
+          
+          <div class="d-flex align-items-center gap-2">
+            <!-- Custom badges -->
+            {% if issue.tester_status == 'Pending' %}
+              <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-10 rounded-pill px-3 py-2">Tester: Pending</span>
+            {% elif issue.tester_status == 'Testing' %}
+              <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-10 rounded-pill px-3 py-2">Tester: Testing</span>
+            {% elif issue.tester_status == 'Fixed' %}
+              <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-10 rounded-pill px-3 py-2">Tester: Fixed</span>
+            {% elif issue.tester_status == 'Rejected' %}
+              <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-10 rounded-pill px-3 py-2">Tester: Rejected</span>
+            {% elif issue.tester_status == 'Need More Info' %}
+              <span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-10 rounded-pill px-3 py-2">Tester: Need Info</span>
+            {% elif issue.tester_status == 'Completed' %}
+              <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-10 rounded-pill px-3 py-2">Tester: Verified</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <h5 class="fw-bold mb-3">Error / Issue Encountered</h5>
+        <div class="p-3 bg-light rounded border mb-4 text-dark" style="font-family: monospace; font-size: 0.95rem;">
+          {{ issue.error_encountered }}
+        </div>
+
+        <h5 class="fw-bold mb-2">Current Developer Task</h5>
+        <p class="text-main mb-4">{{ issue.current_task }}</p>
+
+        <h5 class="fw-bold mb-2">Error Description</h5>
+        <div class="text-main mb-4" style="white-space: pre-wrap;">{{ issue.error_description }}</div>
+
+        <h5 class="fw-bold mb-2">Files & Modules Affected</h5>
+        <p class="text-danger fw-semibold mb-4" style="font-family: monospace; font-size: 0.9rem;">
+          {{ issue.files_affected }}
+        </p>
+
+        {% if issue.expected_solution %}
+          <h5 class="fw-bold mb-2">Expected Solution / Notes</h5>
+          <div class="text-main mb-3" style="white-space: pre-wrap;">{{ issue.expected_solution }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Attachments Card -->
+    <div class="card border-0 shadow-sm mb-4" style="background-color: var(--card-bg);">
+      <div class="card-body p-4">
+        <h5 class="fw-bold mb-3"><i class="bi bi-paperclip me-1"></i> Screenshots & Logs</h5>
+        
+        <!-- Upload Form -->
+        <form method="POST" action="{% url 'dev_issue_upload_attachment' issue.pk %}" enctype="multipart/form-data" class="mb-4">
+          {% csrf_token %}
+          <div class="input-group">
+            <input type="file" name="file" class="form-control bg-transparent border-color text-main" required>
+            <button class="btn btn-outline-secondary border-color" type="submit">Upload File</button>
+          </div>
+          <div class="form-text small text-muted">Upload error logs or reproduction screenshots.</div>
+        </form>
+
+        <!-- Attachment List -->
+        <div class="row g-3">
+          {% if attachments %}
+            {% for attach in attachments %}
+              <div class="col-md-6">
+                <div class="p-3 border rounded d-flex align-items-center justify-content-between" style="border-color: var(--border-color) !important;">
+                  <div class="d-flex align-items-center gap-2 overflow-hidden">
+                    {% if attach.is_image %}
+                      <i class="bi bi-file-earmark-image text-success fs-3"></i>
+                    {% else %}
+                      <i class="bi bi-file-earmark-text text-primary fs-3"></i>
+                    {% endif %}
+                    <div class="overflow-hidden">
+                      <a href="{{ attach.file.url }}" target="_blank" class="fw-semibold small d-block text-truncate text-decoration-none">
+                        {{ attach.filename }}
+                      </a>
+                      <span class="text-muted small" style="font-size: 0.75rem;">{{ attach.uploaded_at|date:"M d, Y H:i" }}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <a href="{{ attach.file.url }}" download class="btn btn-sm btn-link text-main p-0">
+                      <i class="bi bi-download fs-5"></i>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="col-12 py-3 text-center text-muted small">
+              No files uploaded yet.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Collaboration Comments Section -->
+    <div class="card border-0 shadow-sm" style="background-color: var(--card-bg);">
+      <div class="card-body p-4">
+        <h5 class="fw-bold mb-4"><i class="bi bi-chat-left-text me-1"></i> Comments & Discussions</h5>
+
+        <!-- Comments list -->
+        <div class="comment-timeline mb-4">
+          {% if comments %}
+            {% for comment in comments %}
+              <div class="d-flex gap-3 mb-4">
+                {% if comment.user.profile.photo %}
+                  <img src="{{ comment.user.profile.photo.url }}" class="rounded-circle border" width="36" height="36" style="object-fit: cover; flex-shrink: 0;">
+                {% else %}
+                  <div class="d-flex align-items-center justify-content-center bg-secondary text-white rounded-circle font-weight-bold" style="width: 36px; height: 36px; font-size: 0.85rem; flex-shrink: 0;">
+                    {{ comment.user.username|slice:":2"|upper }}
+                  </div>
+                {% endif %}
+                <div class="flex-grow-1 p-3 border rounded shadow-sm" style="background-color: rgba(0,0,0,0.01); border-color: var(--border-color) !important;">
+                  <div class="d-flex justify-content-between align-items-center mb-1">
+                    <div>
+                      <strong class="text-main" style="font-size: 0.9rem;">{{ comment.user.first_name }} {{ comment.user.last_name }}</strong>
+                      <span class="badge bg-secondary text-white rounded-pill px-2 py-0.5 ms-2" style="font-size: 0.65rem;">{{ comment.user.profile.role }}</span>
+                    </div>
+                    <span class="text-muted small" style="font-size: 0.75rem;">{{ comment.created_at|date:"M d, Y H:i" }}</span>
+                  </div>
+                  <div class="text-main small" style="white-space: pre-wrap;">{{ comment.comment_text }}</div>
+                </div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <p class="text-muted text-center py-4 small">No comments logged yet. Start the collaboration below!</p>
+          {% endif %}
+        </div>
+
+        <!-- Comment Input Box -->
+        <form method="POST" action="{% url 'dev_issue_detail' issue.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="comment_submit" value="1">
+          <div class="mb-3">
+            {{ comment_form.comment_text }}
+          </div>
+          <div class="text-end">
+            <button type="submit" class="btn btn-primary shadow-sm">Post Comment</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Column: Metadata & Tester Actions & Timeline -->
+  <div class="col-xl-4 col-lg-5 mb-4">
+    <!-- Actions Box -->
+    {% if global_user_role == 'Tester' or global_user_role == 'Admin' %}
+      <div class="card border-0 shadow-sm mb-4 bg-primary bg-opacity-10 border border-primary border-opacity-10">
+        <div class="card-body p-4">
+          <h5 class="fw-bold mb-3 text-primary"><i class="bi bi-shield-check me-1"></i> Quality Assurance</h5>
+          
+          {% if not issue.tester %}
+            <!-- Not assigned yet -->
+            <p class="text-muted small">This issue has not been assigned to a tester yet. Self-assign to start verification.</p>
+            <form method="POST" action="{% url 'dev_issue_tester_status_view' issue.pk %}">
+              {% csrf_token %}
+              <input type="hidden" name="action_type" value="assign">
+              <button type="submit" class="btn btn-primary w-100 shadow-sm"><i class="bi bi-play-fill me-1"></i> Start Testing</button>
+            </form>
+          {% else %}
+            <!-- Assigned to tester -->
+            <p class="small text-main mb-3">
+              <strong>Assigned Tester:</strong> {{ issue.tester.first_name }} {{ issue.tester.last_name }} ({{ issue.tester.username }})
+            </p>
+            
+            <form method="POST" action="{% url 'dev_issue_tester_status_view' issue.pk %}" class="mb-3">
+              {% csrf_token %}
+              <input type="hidden" name="action_type" value="status_change">
+              <div class="mb-3">
+                <label for="tester-status-select" class="form-label small fw-semibold text-muted">Update Verification Status</label>
+                <select name="tester_status" id="tester-status-select" class="form-select bg-transparent text-main" style="border-color: rgba(79,70,229,0.3) !important;">
+                  {% for s_val, s_label in tester_statuses %}
+                    <option value="{{ s_val }}" {% if issue.tester_status == s_val %}selected{% endif %}>{{ s_label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <button type="submit" class="btn btn-primary w-100 shadow-sm">Update Status</button>
+            </form>
+            
+            {% if issue.tester_status != 'Completed' %}
+              <form method="POST" action="{% url 'dev_issue_tester_status_view' issue.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="action_type" value="resolve">
+                <button type="submit" class="btn btn-success w-100 shadow-sm"><i class="bi bi-check-circle me-1"></i> Verify & Resolve</button>
+              </form>
+            {% endif %}
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+
+    <!-- Info Metadata Box -->
+    <div class="card border-0 shadow-sm mb-4" style="background-color: var(--card-bg);">
+      <div class="card-body p-4">
+        <h5 class="fw-bold mb-4">Properties</h5>
+        
+        <div class="d-flex flex-column gap-3">
+          <div class="d-flex justify-content-between align-items-center border-bottom pb-2" style="border-color: var(--border-color) !important;">
+            <span class="text-muted small">Priority</span>
+            {% if issue.priority == 'Critical' %}
+              <span class="badge" style="background-color: var(--priority-critical-bg); color: var(--priority-critical-text); font-weight: 600;">Critical</span>
+            {% elif issue.priority == 'High' %}
+              <span class="badge" style="background-color: var(--priority-high-bg); color: var(--priority-high-text); font-weight: 600;">High</span>
+            {% elif issue.priority == 'Medium' %}
+              <span class="badge" style="background-color: var(--priority-medium-bg); color: var(--priority-medium-text); font-weight: 600;">Medium</span>
+            {% else %}
+              <span class="badge" style="background-color: var(--priority-low-bg); color: var(--priority-low-text); font-weight: 600;">Low</span>
+            {% endif %}
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center border-bottom pb-2" style="border-color: var(--border-color) !important;">
+            <span class="text-muted small">Developer Status</span>
+            {% if issue.status == 'Blocked' %}
+              <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-10 rounded-pill">Blocked</span>
+            {% elif issue.status == 'Completed' %}
+              <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-10 rounded-pill">Completed</span>
+            {% else %}
+              <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-10 rounded-pill">In Progress</span>
+            {% endif %}
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center border-bottom pb-2" style="border-color: var(--border-color) !important;">
+            <span class="text-muted small">Reporter</span>
+            <span class="small fw-semibold text-main">{{ issue.developer.first_name }} {{ issue.developer.last_name }}</span>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center border-bottom pb-2" style="border-color: var(--border-color) !important;">
+            <span class="text-muted small">Created Timestamp</span>
+            <span class="small text-main">{{ issue.created_at|date:"M d, Y H:i" }}</span>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center pb-1">
+            <span class="text-muted small">Last Updated</span>
+            <span class="small text-main">{{ issue.updated_at|date:"M d, Y H:i" }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Timeline Activity Logs Box -->
+    <div class="card border-0 shadow-sm" style="background-color: var(--card-bg);">
+      <div class="card-body p-4">
+        <h5 class="fw-bold mb-4">Activity Timeline</h5>
+        
+        <div class="timeline-trail position-relative">
+          {% if activities %}
+            {% for act in activities %}
+              <div class="d-flex mb-3 position-relative">
+                <div class="d-flex flex-column align-items-center me-3" style="flex-shrink: 0;">
+                  <div class="rounded-circle bg-primary bg-opacity-10 border border-primary text-primary d-flex align-items-center justify-content-center" style="width: 28px; height: 28px; font-size: 0.85rem;">
+                    <i class="bi bi-clock-history"></i>
+                  </div>
+                  {% if not forloop.last %}
+                    <div class="flex-grow-1" style="width: 2px; background-color: var(--border-color); margin-top: 4px; min-height: 25px;"></div>
+                  {% endif %}
+                </div>
+                <div>
+                  <div class="small fw-bold text-main">{{ act.action }}</div>
+                  <div class="text-muted small" style="font-size: 0.8rem;">{{ act.details }}</div>
+                  <div class="text-muted small" style="font-size: 0.7rem; margin-top: 2px;">
+                    by {{ act.user.username }} &bull; {{ act.created_at|timesince }} ago
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="text-muted text-center py-3 small">
+              No timeline updates logged yet.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

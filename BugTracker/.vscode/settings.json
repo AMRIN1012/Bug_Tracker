@@ -1,0 +1,24 @@
+{
+  // Disable JS/TS linting inside HTML <script> blocks.
+  // Django templates use {{ }} and {% %} syntax which is invalid JavaScript,
+  // causing hundreds of false-positive linter errors in .html template files.
+  "html.validate.scripts": false,
+  "html.validate.styles": false,
+
+  // Exclude Django template files from TypeScript language service checks
+  "javascript.validate.enable": false,
+
+  // Recommended Django/Jinja2 file associations for syntax highlighting
+  "files.associations": {
+    "*.html": "django-html"
+  },
+
+  // Editor formatting — don't auto-format Django templates (breaks template tags)
+  "[django-html]": {
+    "editor.formatOnSave": false,
+    "editor.defaultFormatter": null
+  },
+  "[html]": {
+    "editor.formatOnSave": false
+  }
+}

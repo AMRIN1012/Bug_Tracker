@@ -45,4 +45,21 @@ urlpatterns = [
 
     # Analytics / Reports
     path('analytics/', views.analytics_view, name='analytics'),
+
+    # Developer Issues
+    path('dev-issues/', views.dev_issue_list_view, name='dev_issue_list'),
+    path('dev-issues/create/', views.dev_issue_create_view, name='dev_issue_create'),
+    path('dev-issues/<int:pk>/', views.dev_issue_detail_view, name='dev_issue_detail'),
+    path('dev-issues/<int:pk>/edit/', views.dev_issue_edit_view, name='dev_issue_edit'),
+    path('dev-issues/<int:pk>/tester-status/', views.dev_issue_tester_status_view, name='dev_issue_tester_status'),
+    path('dev-issues/<int:pk>/upload/', views.dev_issue_upload_attachment, name='dev_issue_upload_attachment'),
+
+    # Built-in IDE for Testers
+    path('ide/', views.ide_view, name='ide'),
+    path('ide/api/files/', views.ide_api_files, name='ide_api_files'),
+    path('ide/api/file/read/', views.ide_api_read_file, name='ide_api_read_file'),
+    path('ide/api/file/write/', views.ide_api_write_file, name='ide_api_write_file'),
+    path('ide/api/run/', views.ide_api_run_code, name='ide_api_run_code'),
+    path('ide/api/build/', views.ide_api_build, name='ide_api_build'),
+    path('ide/api/test/', views.ide_api_test, name='ide_api_test'),
 ]

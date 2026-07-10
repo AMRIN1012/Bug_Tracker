@@ -1,0 +1,668 @@
+{% extends 'base.html' %}
+{% block title %}Built-in browser IDE{% endblock %}
+{% block page_title %}Built-in browser IDE{% endblock %}
+
+{% block extra_css %}
+<!-- Monaco Editor CDN Links -->
+<link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.39.0/min/vs/editor/editor.main.min.css">
+<style>
+  /* Premium IDE Styles */
+  .ide-container {
+    display: flex;
+    height: calc(100vh - 190px);
+    min-height: 550px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    background-color: var(--card-bg);
+  }
+
+  .ide-sidebar {
+    width: 280px;
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    background-color: rgba(0,0,0,0.015);
+  }
+
+  .ide-sidebar-header {
+    padding: 16px;
+    border-bottom: 1px solid var(--border-color);
+    font-weight: 700;
+    font-size: 0.9rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .ide-file-tree {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 12px;
+  }
+
+  .file-tree-item {
+    font-size: 0.85rem;
+    padding: 4px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-main);
+    transition: background-color 0.15s;
+    user-select: none;
+  }
+
+  .file-tree-item:hover {
+    background-color: rgba(0,0,0,0.04);
+  }
+
+  .file-tree-item.active {
+    background-color: rgba(79, 70, 229, 0.1);
+    color: var(--primary-color);
+    font-weight: 600;
+  }
+
+  .file-tree-folder {
+    font-weight: 500;
+  }
+
+  .folder-children {
+    padding-left: 16px;
+    display: none;
+  }
+
+  .folder-children.expanded {
+    display: block;
+  }
+
+  .ide-editor-area {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0; /* Prevents flex children from overflowing parent */
+  }
+
+  .ide-editor-header {
+    height: 50px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    background-color: rgba(0,0,0,0.01);
+  }
+
+  .ide-editor-container {
+    flex-grow: 1;
+    position: relative;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .ide-monaco-instance {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .ide-bottom-panel {
+    height: 220px;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    background-color: #1e1e1e;
+    color: #d4d4d4;
+  }
+
+  .ide-panel-tabs {
+    background-color: #2d2d2d;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid #1e1e1e;
+    padding: 0 12px;
+  }
+
+  .ide-tab {
+    padding: 6px 16px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    border-radius: 4px 4px 0 0;
+    color: #aaa;
+    font-weight: 500;
+    user-select: none;
+    transition: color 0.15s, background-color 0.15s;
+  }
+
+  .ide-tab:hover {
+    color: #fff;
+    background-color: #3c3c3c;
+  }
+
+  .ide-tab.active {
+    color: #fff;
+    background-color: #1e1e1e;
+    font-weight: 600;
+  }
+
+  .ide-console-output {
+    flex-grow: 1;
+    padding: 12px;
+    font-family: 'Consolas', 'Courier New', Courier, monospace;
+    font-size: 0.85rem;
+    overflow-y: auto;
+    background-color: #1e1e1e;
+    color: #e2e8f0;
+    white-space: pre-wrap;
+  }
+
+  .ide-console-output .error {
+    color: #f87171;
+  }
+
+  .ide-console-output .success {
+    color: #4ade80;
+  }
+
+  .ide-console-output .info {
+    color: #60a5fa;
+  }
+
+  .ide-search-box {
+    padding: 12px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255,255,255,0.7);
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  body.dark-theme .loading-overlay {
+    background: rgba(0,0,0,0.7);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col-12">
+    <p class="text-muted mb-0">Use this cloud-style in-browser editor to read, edit, execute Python/Django files and run test suites directly on the workspace.</p>
+  </div>
+</div>
+
+<div class="ide-container shadow-sm">
+  <!-- IDE Sidebar -->
+  <div class="ide-sidebar">
+    <div class="ide-sidebar-header text-main">
+      <span>WORKSPACE FILES</span>
+      <button class="btn btn-sm btn-link p-0 text-main" id="refresh-files-btn" title="Refresh files">
+        <i class="bi bi-arrow-clockwise"></i>
+      </button>
+    </div>
+    
+    <!-- File Search bar -->
+    <div class="ide-search-box">
+      <div class="input-group input-group-sm">
+        <span class="input-group-text bg-transparent border-color" style="color: var(--text-muted);"><i class="bi bi-search"></i></span>
+        <input type="text" id="file-search-input" class="form-control bg-transparent border-color text-main" placeholder="Search files...">
+      </div>
+    </div>
+    
+    <!-- Files Explorer Tree -->
+    <div class="ide-file-tree" id="file-tree-container">
+      <div class="text-center py-4 text-muted small">Loading workspace...</div>
+    </div>
+  </div>
+
+  <!-- IDE Editor Area -->
+  <div class="ide-editor-area">
+    <!-- Header panel showing selected file and action controls -->
+    <div class="ide-editor-header text-main">
+      <div class="d-flex align-items-center gap-2">
+        <i class="bi bi-file-earmark-code text-primary fs-5"></i>
+        <span id="current-file-path" class="fw-semibold small">Select a file from the explorer</span>
+        <span class="badge bg-secondary rounded px-2 ms-2 small d-none" id="save-status">Modified</span>
+      </div>
+
+      <div class="d-flex align-items-center gap-2">
+        <!-- Control buttons -->
+        <button id="save-btn" class="btn btn-sm btn-outline-secondary border-color" disabled>
+          <i class="bi bi-save me-1"></i> Save
+        </button>
+        <button id="run-btn" class="btn btn-sm btn-outline-primary border-color" disabled>
+          <i class="bi bi-play-fill me-1"></i> Run Code
+        </button>
+        <button id="build-btn" class="btn btn-sm btn-outline-info border-color" disabled>
+          <i class="bi bi-shield-check me-1"></i> Check Syntax
+        </button>
+        <button id="test-btn" class="btn btn-sm btn-success">
+          <i class="bi bi-terminal me-1"></i> Run Tests
+        </button>
+      </div>
+    </div>
+
+    <!-- Code Editor Container -->
+    <div class="ide-editor-container">
+      <div id="loading-overlay" class="loading-overlay d-none">
+        <div class="spinner-border text-primary spinner-border-sm" role="status"></div>
+      </div>
+      <div id="monaco-editor" class="ide-monaco-instance"></div>
+    </div>
+
+    <!-- Bottom logs and terminal console panel -->
+    <div class="ide-bottom-panel">
+      <div class="ide-panel-tabs">
+        <div class="ide-tab active" id="tab-console" onclick="switchTab('console')">Console Output</div>
+        <div class="ide-tab" id="tab-tests" onclick="switchTab('tests')">Test Logs</div>
+        <div class="ide-tab" id="tab-diagnostics" onclick="switchTab('diagnostics')">Diagnostics</div>
+      </div>
+
+      <div class="ide-console-output" id="ide-console-body">
+        Welcome to BugTracker visual terminal console. Select a file and click 'Run Code' or 'Check Syntax'.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Monaco Loader -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.39.0/min/vs/loader.min.js"></script>
+<script>
+  let editor = null;
+  let activeFilePath = null;
+  let originalFileContent = "";
+  let isModified = false;
+  let currentActiveTab = "console";
+  let consoleLogsText = "Welcome to BugTracker visual terminal console. Select a file and click 'Run Code' or 'Check Syntax'.";
+  let testLogsText = "";
+  let diagnosticsLogsText = "";
+
+  // Check if dark theme is activated
+  const isDarkTheme = document.body.classList.contains('dark-theme');
+
+  // Load Monaco Editor
+  require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.39.0/min/vs' } });
+  require(['vs/editor/editor.main'], function () {
+    editor = monaco.editor.create(document.getElementById('monaco-editor'), {
+      value: "# Welcome to BugTracker browser IDE.\n# Select a project file from the left sidebar to start hacking.",
+      language: 'python',
+      theme: isDarkTheme ? 'vs-dark' : 'vs',
+      automaticLayout: true,
+      fontSize: 14,
+      minimap: { enabled: false },
+      lineHeight: 22
+    });
+
+    // Listen to changes in the editor
+    editor.onDidChangeModelContent(() => {
+      if (activeFilePath) {
+        const currentValue = editor.getValue();
+        if (currentValue !== originalFileContent) {
+          isModified = true;
+          document.getElementById('save-status').classList.remove('d-none');
+          document.getElementById('save-btn').removeAttribute('disabled');
+        } else {
+          isModified = false;
+          document.getElementById('save-status').classList.add('d-none');
+          document.getElementById('save-btn').setAttribute('disabled', 'true');
+        }
+      }
+    });
+
+    // Handle Resize
+    window.addEventListener('resize', () => {
+      editor.layout();
+    });
+
+    // Initialize Workspace File Explorer
+    loadFileTree();
+  });
+
+  // Toggle Theme helper for Monaco
+  const themeToggleBtn = document.getElementById('theme-toggle');
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener('click', () => {
+      setTimeout(() => {
+        const darkNow = document.body.classList.contains('dark-theme');
+        if (editor) {
+          monaco.editor.setTheme(darkNow ? 'vs-dark' : 'vs');
+        }
+      }, 50);
+    });
+  }
+
+  // Load File Tree from Backend
+  function loadFileTree() {
+    fetch("{% url 'ide_api_files' %}")
+      .then(res => res.json())
+      .then(data => {
+        if (data.tree) {
+          const container = document.getElementById('file-tree-container');
+          container.innerHTML = "";
+          renderTreeNodes(data.tree, container);
+        }
+      })
+      .catch(err => {
+        console.error("Failed to load file explorer tree:", err);
+      });
+  }
+
+  // Render tree node recursive
+  function renderTreeNodes(nodes, container) {
+    nodes.forEach(node => {
+      const itemEl = document.createElement('div');
+      itemEl.className = `file-tree-item ${node.is_dir ? 'file-tree-folder' : 'file-tree-file'}`;
+      
+      const iconClass = node.is_dir ? 'bi-folder-fill text-warning' : 'bi-file-earmark-code text-secondary';
+      itemEl.innerHTML = `<i class="bi ${iconClass}"></i><span>${node.name}</span>`;
+      
+      container.appendChild(itemEl);
+
+      if (node.is_dir) {
+        const childrenContainer = document.createElement('div');
+        childrenContainer.className = "folder-children";
+        container.appendChild(childrenContainer);
+
+        // Click handler to toggle folders
+        itemEl.addEventListener('click', (e) => {
+          e.stopPropagation();
+          childrenContainer.classList.toggle('expanded');
+          const isExpanded = childrenContainer.classList.contains('expanded');
+          itemEl.querySelector('i').className = `bi ${isExpanded ? 'bi-folder2-open text-warning' : 'bi-folder-fill text-warning'}`;
+        });
+
+        // Recursively render children
+        if (node.children && node.children.length > 0) {
+          renderTreeNodes(node.children, childrenContainer);
+        } else {
+          const emptyEl = document.createElement('div');
+          emptyEl.className = "text-muted small ps-4 py-1";
+          emptyEl.innerText = "Empty Folder";
+          childrenContainer.appendChild(emptyEl);
+        }
+      } else {
+        // File item click handler: load code
+        itemEl.addEventListener('click', (e) => {
+          e.stopPropagation();
+          
+          // Remove active styles from other files
+          document.querySelectorAll('.file-tree-item').forEach(el => el.classList.remove('active'));
+          itemEl.classList.add('active');
+
+          loadFileIntoEditor(node.path);
+        });
+      }
+    });
+  }
+
+  // Search filter files
+  document.getElementById('file-search-input').addEventListener('input', (e) => {
+    const val = e.target.value.toLowerCase();
+    document.querySelectorAll('.file-tree-item').forEach(el => {
+      const txt = el.innerText.toLowerCase();
+      if (txt.includes(val)) {
+        el.style.display = "flex";
+      } else {
+        el.style.display = "none";
+      }
+    });
+  });
+
+  // Refresh files click
+  document.getElementById('refresh-files-btn').addEventListener('click', () => {
+    loadFileTree();
+  });
+
+  // Load File contents
+  function loadFileIntoEditor(path) {
+    if (isModified) {
+      if (!confirm("You have unsaved changes. Discard them?")) {
+        return;
+      }
+    }
+
+    document.getElementById('loading-overlay').classList.remove('d-none');
+    fetch(`{% url 'ide_api_read_file' %}?path=${encodeURIComponent(path)}`)
+      .then(res => res.json())
+      .then(data => {
+        document.getElementById('loading-overlay').classList.add('d-none');
+        if (data.error) {
+          alert("Error opening file: " + data.error);
+        } else {
+          activeFilePath = path;
+          originalFileContent = data.content;
+          isModified = false;
+          
+          document.getElementById('current-file-path').innerText = path;
+          document.getElementById('save-status').classList.add('d-none');
+          document.getElementById('save-btn').setAttribute('disabled', 'true');
+          
+          // Detect programming language
+          let lang = 'plaintext';
+          if (path.endsWith('.py')) lang = 'python';
+          else if (path.endsWith('.html')) lang = 'html';
+          else if (path.endsWith('.css')) lang = 'css';
+          else if (path.endsWith('.js')) lang = 'javascript';
+          else if (path.endsWith('.json')) lang = 'json';
+
+          const model = monaco.editor.createModel(data.content, lang);
+          editor.setModel(model);
+
+          // Enable file actions
+          document.getElementById('save-btn').removeAttribute('disabled');
+          if (path.endsWith('.py')) {
+            document.getElementById('run-btn').removeAttribute('disabled');
+            document.getElementById('build-btn').removeAttribute('disabled');
+          } else {
+            document.getElementById('run-btn').setAttribute('disabled', 'true');
+            document.getElementById('build-btn').setAttribute('disabled', 'true');
+          }
+        }
+      })
+      .catch(err => {
+        document.getElementById('loading-overlay').classList.add('d-none');
+        alert("Server communication failed.");
+      });
+  }
+
+  // Save Code Action
+  document.getElementById('save-btn').addEventListener('click', saveActiveFile);
+
+  function saveActiveFile() {
+    if (!activeFilePath) return;
+    const content = editor.getValue();
+    
+    document.getElementById('loading-overlay').classList.remove('d-none');
+    const formData = new FormData();
+    formData.append('path', activeFilePath);
+    formData.append('content', content);
+    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+    fetch("{% url 'ide_api_write_file' %}", {
+      method: 'POST',
+      body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+      document.getElementById('loading-overlay').classList.add('d-none');
+      if (data.success) {
+        originalFileContent = content;
+        isModified = false;
+        document.getElementById('save-status').classList.add('d-none');
+        document.getElementById('save-btn').setAttribute('disabled', 'true');
+        appendConsoleLog(`[IDE] Successfully saved changes to file '${activeFilePath}'`, 'success');
+      } else {
+        alert("Save failed: " + data.error);
+      }
+    })
+    .catch(err => {
+      document.getElementById('loading-overlay').classList.add('d-none');
+      alert("Save failed due to communication error.");
+    });
+  }
+
+  // Run Code Action
+  document.getElementById('run-btn').addEventListener('click', () => {
+    if (!activeFilePath) return;
+    
+    switchTab('console');
+    appendConsoleLog(`[IDE] Starting execution of script '${activeFilePath}'...\n`, 'info');
+    
+    const formData = new FormData();
+    formData.append('path', activeFilePath);
+    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+    fetch("{% url 'ide_api_run_code' %}", {
+      method: 'POST',
+      body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.error) {
+        appendConsoleLog(`[Execution Error] ${data.error}`, 'error');
+      } else {
+        if (data.stdout) {
+          appendConsoleLog(data.stdout);
+        }
+        if (data.stderr) {
+          appendConsoleLog(data.stderr, 'error');
+        }
+        appendConsoleLog(`\nProcess completed with Exit Code: ${data.exit_code}`, data.exit_code === 0 ? 'success' : 'error');
+      }
+    })
+    .catch(err => {
+      appendConsoleLog("[Execution Error] Connection lost.", "error");
+    });
+  });
+
+  // Check Syntax / Build Action
+  document.getElementById('build-btn').addEventListener('click', () => {
+    if (!activeFilePath) return;
+    
+    switchTab('diagnostics');
+    diagnosticsLogsText = `[IDE] Analyzing file syntax for '${activeFilePath}'...\n`;
+    updateConsoleBody(diagnosticsLogsText);
+
+    const formData = new FormData();
+    formData.append('path', activeFilePath);
+    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+    fetch("{% url 'ide_api_build' %}", {
+      method: 'POST',
+      body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        diagnosticsLogsText += `<span class="success">No compilation/syntax errors detected! Code parsed successfully.</span>`;
+      } else if (data.diagnostics && data.diagnostics.length > 0) {
+        const diag = data.diagnostics[0];
+        diagnosticsLogsText += `<span class="error">Syntax Error detected!</span>\n`;
+        diagnosticsLogsText += `<span class="error">Line ${diag.line}, Offset ${diag.offset}: ${diag.text}</span>\n`;
+        if (diag.code) {
+          diagnosticsLogsText += `<code>Code: ${diag.code.trim()}</code>\n`;
+        }
+      } else {
+        diagnosticsLogsText += `<span class="error">Error analyzing: ${data.error || 'Unknown error'}</span>`;
+      }
+      updateConsoleBody(diagnosticsLogsText);
+    })
+    .catch(err => {
+      diagnosticsLogsText += `<span class="error">Diagnostics connection failed.</span>`;
+      updateConsoleBody(diagnosticsLogsText);
+    });
+  });
+
+  // Run Django Test Suite
+  document.getElementById('test-btn').addEventListener('click', () => {
+    switchTab('tests');
+    testLogsText = `[IDE] Launching Django project test suite (manage.py test)...\n`;
+    updateConsoleBody(testLogsText);
+
+    const formData = new FormData();
+    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+    fetch("{% url 'ide_api_test' %}", {
+      method: 'POST',
+      body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.error) {
+        testLogsText += `<span class="error">Test Execution Error: ${data.error}</span>`;
+      } else {
+        testLogsText += data.output;
+        testLogsText += `\n\n<span class="${data.exit_code === 0 ? 'success' : 'error'}">Tests finished with Exit Code: ${data.exit_code}</span>`;
+      }
+      updateConsoleBody(testLogsText);
+    })
+    .catch(err => {
+      testLogsText += `<span class="error">Test suite runner connection failed.</span>`;
+      updateConsoleBody(testLogsText);
+    });
+  });
+
+  // Switch terminal tabs
+  function switchTab(tabId) {
+    currentActiveTab = tabId;
+    document.querySelectorAll('.ide-tab').forEach(el => el.classList.remove('active'));
+    document.getElementById(`tab-${tabId}`).classList.add('active');
+    
+    if (tabId === 'console') {
+      updateConsoleBody(consoleLogsText);
+    } else if (tabId === 'tests') {
+      updateConsoleBody(testLogsText || "Click 'Run Tests' to execute the test suite.");
+    } else if (tabId === 'diagnostics') {
+      updateConsoleBody(diagnosticsLogsText || "Open a python file and click 'Check Syntax' for AST diagnostics.");
+    }
+  }
+
+  // Update Console Body HTML
+  function updateConsoleBody(html) {
+    const el = document.getElementById('ide-console-body');
+    el.innerHTML = html;
+    el.scrollTop = el.scrollHeight; // Auto-scroll to bottom
+  }
+
+  // Append console output logs helper
+  function appendConsoleLog(text, level = '') {
+    let cleanText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    if (level === 'error') {
+      consoleLogsText += `<span class="error">${cleanText}</span>\n`;
+    } else if (level === 'success') {
+      consoleLogsText += `<span class="success">${cleanText}</span>\n`;
+    } else if (level === 'info') {
+      consoleLogsText += `<span class="info">${cleanText}</span>\n`;
+    } else {
+      consoleLogsText += `${cleanText}\n`;
+    }
+    
+    if (currentActiveTab === 'console') {
+      updateConsoleBody(consoleLogsText);
+    }
+  }
+
+  // Key shortcuts
+  window.addEventListener('keydown', (e) => {
+    // Ctrl+S to save
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault();
+      saveActiveFile();
+    }
+  });
+</script>
+{% endblock %}

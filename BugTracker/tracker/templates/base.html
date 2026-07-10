@@ -49,6 +49,24 @@
             <span>Activity Logs</span>
           </a>
         </li>
+
+        <!-- Developer Issues Link -->
+        <li class="nav-item {% if request.resolver_match.url_name == 'dev_issue_list' or request.resolver_match.url_name == 'dev_issue_detail' or request.resolver_match.url_name == 'dev_issue_create' or request.resolver_match.url_name == 'dev_issue_edit' %}active{% endif %}">
+          <a href="{% url 'dev_issue_list' %}" class="nav-link-custom">
+            <i class="bi bi-kanban"></i>
+            <span>Developer Issues</span>
+          </a>
+        </li>
+        
+        <!-- Built-in browser IDE Link (Tester & Admin only) -->
+        {% if global_user_role == 'Tester' or global_user_role == 'Admin' %}
+        <li class="nav-item {% if request.resolver_match.url_name == 'ide' %}active{% endif %}">
+          <a href="{% url 'ide' %}" class="nav-link-custom">
+            <i class="bi bi-code-slash"></i>
+            <span>Browser IDE</span>
+          </a>
+        </li>
+        {% endif %}
         
         {% if global_user_role == 'Admin' %}
         <li class="nav-item {% if request.resolver_match.url_name == 'user_list' %}active{% endif %}">

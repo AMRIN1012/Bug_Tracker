@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import AuthenticationForm
 from django.core.exceptions import ValidationError
-from .models import UserProfile, Bug, Comment, ROLE_CHOICES, ROLE_DEVELOPER
+from .models import UserProfile, Bug, Comment, ROLE_CHOICES, ROLE_DEVELOPER, DeveloperIssue, DeveloperIssueComment
 
 class RegistrationForm(forms.ModelForm):
     full_name = forms.CharField(max_length=150, required=True, 
@@ -110,3 +110,38 @@ class UserProfileForm(forms.ModelForm):
             user.save()
             profile.save()
         return profile
+
+
+class DeveloperIssueForm(forms.ModelForm):
+    class Meta:
+        model = DeveloperIssue
+        fields = [
+            'project_name',
+            'current_task',
+            'status',
+            'error_encountered',
+            'error_description',
+            'files_affected',
+            'expected_solution',
+            'priority',
+        ]
+        widgets = {
+            'project_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Portal Redesign'}),
+            'current_task': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Integrate payment gateway'}),
+            'status': forms.Select(attrs={'class': 'form-select'}),
+            'error_encountered': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. ZeroDivisionError at billing.py line 25'}),
+            'error_description': forms.Textarea(attrs={'class': 'form-control', 'rows': 4, 'placeholder': 'Detailed description of the issue...'}),
+            'files_affected': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'e.g. tracker/views.py, tracker/models.py'}),
+            'expected_solution': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'What is the expected outcome or notes?'}),
+            'priority': forms.Select(attrs={'class': 'form-select'}),
+        }
+
+
+class DeveloperIssueCommentForm(forms.ModelForm):
+    class Meta:
+        model = DeveloperIssueComment
+        fields = ['comment_text']
+        widgets = {
+            'comment_text': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Add a comment or testing note...'}),
+        }
+

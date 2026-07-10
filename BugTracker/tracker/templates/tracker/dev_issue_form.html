@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-xl-8 col-lg-10">
+    <div class="d-flex mb-4">
+      <a href="{% if issue %}{% url 'dev_issue_detail' issue.pk %}{% else %}{% url 'dev_issue_list' %}{% endif %}" class="btn btn-outline-secondary border-color btn-sm">
+        <i class="bi bi-arrow-left me-1"></i> Cancel
+      </a>
+    </div>
+
+    <div class="card border-0 shadow-sm" style="background-color: var(--card-bg);">
+      <div class="card-body p-4">
+        <h4 class="fw-bold mb-4 text-main">{{ title }}</h4>
+        
+        <form method="POST" class="row g-3">
+          {% csrf_token %}
+          
+          <!-- Project & Task Name -->
+          <div class="col-md-6">
+            <label for="id_project_name" class="form-label fw-semibold small text-muted">Project Name</label>
+            {{ form.project_name }}
+            {% if form.project_name.errors %}
+              <div class="text-danger small mt-1">{{ form.project_name.errors.0 }}</div>
+            {% endif %}
+          </div>
+          
+          <div class="col-md-6">
+            <label for="id_current_task" class="form-label fw-semibold small text-muted">Current Task / Feature working on</label>
+            {{ form.current_task }}
+            {% if form.current_task.errors %}
+              <div class="text-danger small mt-1">{{ form.current_task.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <!-- Status & Priority -->
+          <div class="col-md-6">
+            <label for="id_status" class="form-label fw-semibold small text-muted">Developer Work Status</label>
+            {{ form.status }}
+            {% if form.status.errors %}
+              <div class="text-danger small mt-1">{{ form.status.errors.0 }}</div>
+            {% endif %}
+          </div>
+          
+          <div class="col-md-6">
+            <label for="id_priority" class="form-label fw-semibold small text-muted">Issue Priority</label>
+            {{ form.priority }}
+            {% if form.priority.errors %}
+              <div class="text-danger small mt-1">{{ form.priority.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <!-- Error details -->
+          <div class="col-12">
+            <label for="id_error_encountered" class="form-label fw-semibold small text-muted">Error / Issue Encountered</label>
+            {{ form.error_encountered }}
+            {% if form.error_encountered.errors %}
+              <div class="text-danger small mt-1">{{ form.error_encountered.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="col-12">
+            <label for="id_error_description" class="form-label fw-semibold small text-muted">Error Description</label>
+            {{ form.error_description }}
+            {% if form.error_description.errors %}
+              <div class="text-danger small mt-1">{{ form.error_description.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="col-12">
+            <label for="id_files_affected" class="form-label fw-semibold small text-muted">Files / Modules Affected</label>
+            {{ form.files_affected }}
+            {% if form.files_affected.errors %}
+              <div class="text-danger small mt-1">{{ form.files_affected.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="col-12">
+            <label for="id_expected_solution" class="form-label fw-semibold small text-muted">Expected Solution or Notes (Optional)</label>
+            {{ form.expected_solution }}
+            {% if form.expected_solution.errors %}
+              <div class="text-danger small mt-1">{{ form.expected_solution.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="col-12 text-end mt-4 border-top pt-3" style="border-color: var(--border-color) !important;">
+            <button type="submit" class="btn btn-primary px-4 shadow-sm">Save Issue</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
