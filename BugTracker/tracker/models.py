@@ -4,14 +4,22 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 # Roles choices
+ROLE_SUPER_ADMIN = 'Super Admin'
 ROLE_ADMIN = 'Admin'
+ROLE_PM = 'Project Manager'
+ROLE_TEAM_LEAD = 'Team Lead'
 ROLE_DEVELOPER = 'Developer'
 ROLE_TESTER = 'Tester'
+ROLE_CLIENT = 'Client'
 
 ROLE_CHOICES = [
+    (ROLE_SUPER_ADMIN, 'Super Admin'),
     (ROLE_ADMIN, 'Admin'),
+    (ROLE_PM, 'Project Manager'),
+    (ROLE_TEAM_LEAD, 'Team Lead'),
     (ROLE_DEVELOPER, 'Developer'),
-    (ROLE_TESTER, 'Tester'),
+    (ROLE_TESTER, 'Tester / QA'),
+    (ROLE_CLIENT, 'Client'),
 ]
 
 # Bug Types choices
@@ -59,24 +67,130 @@ SEVERITY_CHOICES = [
 
 # Status choices
 STATUS_OPEN = 'Open'
+STATUS_NEW = 'New'
 STATUS_ASSIGNED = 'Assigned'
+STATUS_ACKNOWLEDGED = 'Acknowledged'
 STATUS_IN_PROGRESS = 'In Progress'
-STATUS_RESOLVED = 'Resolved'
+STATUS_CODE_REVIEW = 'Code Review'
+STATUS_READY_TESTING = 'Ready for Testing'
 STATUS_TESTING = 'Testing'
+STATUS_PASSED = 'Passed'
 STATUS_CLOSED = 'Closed'
 STATUS_REOPENED = 'Reopened'
 STATUS_REJECTED = 'Rejected'
 
 STATUS_CHOICES = [
     (STATUS_OPEN, 'Open'),
+    (STATUS_NEW, 'New'),
     (STATUS_ASSIGNED, 'Assigned'),
+    (STATUS_ACKNOWLEDGED, 'Acknowledged'),
     (STATUS_IN_PROGRESS, 'In Progress'),
-    (STATUS_RESOLVED, 'Resolved'),
+    (STATUS_CODE_REVIEW, 'Code Review'),
+    (STATUS_READY_TESTING, 'Ready for Testing'),
     (STATUS_TESTING, 'Testing'),
+    (STATUS_PASSED, 'Passed'),
     (STATUS_CLOSED, 'Closed'),
     (STATUS_REOPENED, 'Reopened'),
     (STATUS_REJECTED, 'Rejected'),
 ]
+
+
+# --- New Project Management Models ---
+
+class Project(models.Model):
+    STATUS_ACTIVE = 'Active'
+    STATUS_ARCHIVED = 'Archived'
+    PROJECT_STATUS_CHOICES = [
+        (STATUS_ACTIVE, 'Active'),
+        (STATUS_ARCHIVED, 'Archived'),
+    ]
+
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True, null=True)
+    repository_url = models.URLField(max_length=255, blank=True, null=True)
+    technology_stack = models.CharField(max_length=255, blank=True, null=True)
+    deadline = models.DateField(blank=True, null=True)
+    status = models.CharField(max_length=20, choices=PROJECT_STATUS_CHOICES, default=STATUS_ACTIVE)
+    members = models.ManyToManyField(User, blank=True, related_name='projects')
+    team_leads = models.ManyToManyField(User, blank=True, related_name='led_projects')
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_projects')
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        ordering = ['name']
+
+
+class Module(models.Model):
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='modules')
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.project.name} - {self.name}"
+
+    class Meta:
+        unique_together = ('project', 'name')
+        ordering = ['name']
+
+
+class Feature(models.Model):
+    module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='features')
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.module.name} - {self.name}"
+
+    class Meta:
+        unique_together = ('module', 'name')
+        ordering = ['name']
+
+
+class Sprint(models.Model):
+    STATUS_PLANNING = 'Planning'
+    STATUS_ACTIVE = 'Active'
+    STATUS_COMPLETED = 'Completed'
+    SPRINT_STATUS_CHOICES = [
+        (STATUS_PLANNING, 'Planning'),
+        (STATUS_ACTIVE, 'Active'),
+        (STATUS_COMPLETED, 'Completed'),
+    ]
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='sprints')
+    name = models.CharField(max_length=100)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    status = models.CharField(max_length=20, choices=SPRINT_STATUS_CHOICES, default=STATUS_PLANNING)
+
+    def __str__(self):
+        return f"{self.project.name} - {self.name}"
+
+    class Meta:
+        ordering = ['start_date']
+
+
+class Release(models.Model):
+    STATUS_PLANNING = 'Planning'
+    STATUS_RELEASED = 'Released'
+    RELEASE_STATUS_CHOICES = [
+        (STATUS_PLANNING, 'Planning'),
+        (STATUS_RELEASED, 'Released'),
+    ]
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='releases')
+    version_name = models.CharField(max_length=50)
+    release_date = models.DateField(blank=True, null=True)
+    status = models.CharField(max_length=20, choices=RELEASE_STATUS_CHOICES, default=STATUS_PLANNING)
+
+    def __str__(self):
+        return f"{self.project.name} - {self.version_name}"
+
+    class Meta:
+        unique_together = ('project', 'version_name')
+        ordering = ['-release_date']
 
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
@@ -93,7 +207,7 @@ class UserProfile(models.Model):
 
     @property
     def resolved_bugs_count(self):
-        return self.user.assigned_bugs.filter(status=STATUS_RESOLVED).count()
+        return self.user.assigned_bugs.filter(status=STATUS_PASSED).count()
 
     @property
     def closed_bugs_count(self):
@@ -117,21 +231,70 @@ def save_user_profile(sender, instance, **kwargs):
 class Bug(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField()
-    project_name = models.CharField(max_length=100)
-    module_name = models.CharField(max_length=100)
+    project_name = models.CharField(max_length=100, blank=True, null=True)
+    module_name = models.CharField(max_length=100, blank=True, null=True)
+    
+    # New relationships
+    bug_id = models.CharField(max_length=20, unique=True, blank=True, null=True)
+    project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name='bugs')
+    module = models.ForeignKey(Module, on_delete=models.SET_NULL, null=True, blank=True, related_name='bugs')
+    feature = models.ForeignKey(Feature, on_delete=models.SET_NULL, null=True, blank=True, related_name='bugs')
+    sprint = models.ForeignKey(Sprint, on_delete=models.SET_NULL, null=True, blank=True, related_name='bugs')
+    release = models.ForeignKey(Release, on_delete=models.SET_NULL, null=True, blank=True, related_name='bugs')
+    
     bug_type = models.CharField(max_length=50, choices=BUG_TYPE_CHOICES, default=BUG_TYPE_FUNCTIONAL)
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default=PRIORITY_MEDIUM)
     severity = models.CharField(max_length=20, choices=SEVERITY_CHOICES, default=SEVERITY_MAJOR)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_OPEN)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_NEW)
     
+    expected_result = models.TextField(blank=True, null=True)
+    actual_result = models.TextField(blank=True, null=True)
+    steps_to_reproduce = models.TextField(blank=True, null=True)
+    
+    # Environment info
+    environment = models.CharField(max_length=50, default='Development')
+    browser = models.CharField(max_length=100, blank=True, null=True)
+    operating_system = models.CharField(max_length=100, blank=True, null=True)
+    device = models.CharField(max_length=100, blank=True, null=True)
+    build_version = models.CharField(max_length=50, blank=True, null=True)
+    app_version = models.CharField(max_length=50, blank=True, null=True)
+    
+    # Classification & Time tracking
+    category = models.CharField(max_length=50, blank=True, null=True)
+    labels = models.CharField(max_length=255, blank=True, null=True, help_text="Comma-separated labels")
+    tags = models.CharField(max_length=255, blank=True, null=True, help_text="Comma-separated tags")
+    
+    estimated_hours = models.DecimalField(max_digits=6, decimal_places=2, default=0.0)
+    actual_hours = models.DecimalField(max_digits=6, decimal_places=2, default=0.0)
+    
+    # Git integration fields
+    git_branch = models.CharField(max_length=100, blank=True, null=True)
+    commit_hash = models.CharField(max_length=100, blank=True, null=True)
+    pull_request_link = models.CharField(max_length=255, blank=True, null=True)
+    
+    # Assignment
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_bugs')
     assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_bugs')
+    tester = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_testing_bugs')
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def save(self, *args, **kwargs):
+        if not self.bug_id:
+            count = Bug.objects.count() + 1
+            self.bug_id = f"BUG-{1000 + count}"
+        
+        # Populate project_name & module_name for backward compatibility if possible
+        if self.project:
+            self.project_name = self.project.name
+        if self.module:
+            self.module_name = self.module.name
+            
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return self.title
+        return f"{self.bug_id or 'NEW'} - {self.title}"
 
     class Meta:
         ordering = ['-created_at']

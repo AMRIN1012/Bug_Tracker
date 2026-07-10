@@ -3,15 +3,33 @@
 {% block page_title %}Bug Tracker Board{% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-  <div class="col-12 d-flex flex-wrap align-items-center justify-content-between gap-3">
-    <div>
-      <p class="text-muted mb-0">Monitor, filter, and track registered bugs across all products.</p>
-    </div>
-    {% if global_user_role == 'Admin' or global_user_role == 'Tester' %}
-      <a href="{% url 'bug_create' %}" class="btn btn-primary d-flex align-items-center gap-2" style="border-radius: 8px; font-weight: 600;">
-        <i class="bi bi-plus-lg"></i> Report New Bug
-      </a>
+<!-- Role context banner -->
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+  <div>
+    {% if global_user_role == 'Developer' %}
+    <h5 class="fw-bold mb-1"><i class="bi bi-bug me-2 text-primary"></i>My Assigned Bugs</h5>
+    <p class="text-muted mb-0">Bugs currently assigned to you — update status as you progress.</p>
+    {% elif global_user_role == 'Tester' %}
+    <h5 class="fw-bold mb-1"><i class="bi bi-bug me-2 text-success"></i>Test Bug Board</h5>
+    <p class="text-muted mb-0">Report bugs, review test cases, and verify fixes.</p>
+    {% elif global_user_role == 'Client' %}
+    <h5 class="fw-bold mb-1"><i class="bi bi-bug me-2 text-info"></i>My Reported Issues</h5>
+    <p class="text-muted mb-0">Track the status of issues you have submitted.</p>
+    {% else %}
+    <h5 class="fw-bold mb-1"><i class="bi bi-list-task me-2 text-primary"></i>All Bugs</h5>
+    <p class="text-muted mb-0">Monitor, filter, and manage all registered bugs across products.</p>
+    {% endif %}
+  </div>
+  <div class="d-flex gap-2">
+    {% if global_user_role == 'Admin' or global_user_role == 'Super Admin' or global_user_role == 'Tester' %}
+    <a href="{% url 'bug_create' %}" class="btn btn-danger d-flex align-items-center gap-2" style="border-radius:8px;font-weight:600;">
+      <i class="bi bi-plus-lg"></i> Report Bug
+    </a>
+    {% endif %}
+    {% if global_user_role == 'Admin' or global_user_role == 'Super Admin' or global_user_role == 'Project Manager' or global_user_role == 'Team Lead' %}
+    <a href="{% url 'kanban' %}" class="btn btn-outline-primary d-flex align-items-center gap-2" style="border-radius:8px;">
+      <i class="bi bi-columns-gap"></i> Kanban View
+    </a>
     {% endif %}
   </div>
 </div>
@@ -100,8 +118,8 @@
           </div>
         </div>
 
-        <!-- Assignee Filter (Admin only/Tester only filter helper) -->
-        {% if global_user_role == 'Admin' or global_user_role == 'Tester' %}
+        <!-- Assignee Filter: management roles only -->
+        {% if global_user_role == 'Admin' or global_user_role == 'Super Admin' or global_user_role == 'Project Manager' or global_user_role == 'Team Lead' or global_user_role == 'Tester' %}
         <div class="mb-3">
           <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">Assigned Developer</label>
           <select name="assignee" class="form-select" onchange="this.form.submit()">

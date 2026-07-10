@@ -16,9 +16,11 @@ import ast
 from .models import (
     UserProfile, Bug, BugAttachment, Comment, Notification, 
     ActivityLog, AssignmentHistory,
-    ROLE_ADMIN, ROLE_DEVELOPER, ROLE_TESTER,
-    STATUS_OPEN, STATUS_ASSIGNED, STATUS_IN_PROGRESS, STATUS_RESOLVED,
-    STATUS_TESTING, STATUS_CLOSED, STATUS_REOPENED, STATUS_REJECTED,
+    Project, Module, Feature, Sprint, Release,
+    ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_PM, ROLE_TEAM_LEAD, ROLE_DEVELOPER, ROLE_TESTER, ROLE_CLIENT,
+    STATUS_OPEN, STATUS_NEW, STATUS_ASSIGNED, STATUS_ACKNOWLEDGED, STATUS_IN_PROGRESS,
+    STATUS_CODE_REVIEW, STATUS_READY_TESTING, STATUS_TESTING, STATUS_PASSED,
+    STATUS_CLOSED, STATUS_REOPENED, STATUS_REJECTED,
     PRIORITY_LOW, PRIORITY_MEDIUM, PRIORITY_HIGH, PRIORITY_CRITICAL,
     STATUS_CHOICES, PRIORITY_CHOICES, SEVERITY_CHOICES, BUG_TYPE_CHOICES,
     DeveloperIssue, DeveloperIssueAttachment, DeveloperIssueComment, DeveloperIssueActivity
@@ -157,22 +159,28 @@ def dashboard_view(request):
     user = request.user
     role = user.profile.role
 
-    # General dashboard stats
-    if role == ROLE_DEVELOPER:
-        bugs_qs = Bug.objects.filter(assigned_to=user)
-    else:
+    # Bug queryset scoped by role
+    ADMIN_ROLES = [ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_PM, ROLE_TEAM_LEAD]
+    if role in ADMIN_ROLES:
         bugs_qs = Bug.objects.all()
+    elif role == ROLE_DEVELOPER:
+        bugs_qs = Bug.objects.filter(assigned_to=user)
+    elif role == ROLE_TESTER:
+        bugs_qs = Bug.objects.filter(Q(created_by=user) | Q(tester=user))
+    else:
+        # Client: only their own submissions
+        bugs_qs = Bug.objects.filter(created_by=user)
 
     total_bugs = bugs_qs.count()
     open_bugs = bugs_qs.filter(status=STATUS_OPEN).count()
     assigned_bugs = bugs_qs.filter(status=STATUS_ASSIGNED).count()
     in_progress_bugs = bugs_qs.filter(status=STATUS_IN_PROGRESS).count()
-    resolved_bugs = bugs_qs.filter(status=STATUS_RESOLVED).count()
+    resolved_bugs = bugs_qs.filter(status=STATUS_PASSED).count()
     closed_bugs = bugs_qs.filter(status=STATUS_CLOSED).count()
     critical_bugs = bugs_qs.filter(priority=PRIORITY_CRITICAL).count()
 
     # Recent activity logs
-    if role == ROLE_ADMIN:
+    if role in ADMIN_ROLES:
         recent_activities = ActivityLog.objects.all()[:10]
     else:
         recent_activities = ActivityLog.objects.filter(
@@ -284,13 +292,20 @@ def dashboard_view(request):
 def bug_list_view(request):
     user = request.user
     role = user.profile.role
+    ADMIN_ROLES = [ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_PM, ROLE_TEAM_LEAD]
 
-    # Core queryset
-    if role == ROLE_DEVELOPER:
-        # Developers only view bugs assigned to them
-        bugs_qs = Bug.objects.filter(assigned_to=user)
-    else:
+    # Core queryset scoped by role
+    if role in ADMIN_ROLES:
         bugs_qs = Bug.objects.all()
+    elif role == ROLE_DEVELOPER:
+        # Developers only see bugs assigned to them
+        bugs_qs = Bug.objects.filter(assigned_to=user)
+    elif role == ROLE_TESTER:
+        # Testers see bugs they created or are assigned to test
+        bugs_qs = Bug.objects.filter(Q(created_by=user) | Q(tester=user))
+    else:
+        # Client: only their own submissions
+        bugs_qs = Bug.objects.filter(created_by=user)
 
     # Searching logic (Instant Search compatible)
     search_query = request.GET.get('q', '')
@@ -578,22 +593,25 @@ def bug_status_update_view(request, pk):
     new_status = request.POST.get('status')
 
     # Security check on roles workflow permissions
+    ADMIN_ROLES = [ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_PM, ROLE_TEAM_LEAD]
     if role == ROLE_DEVELOPER:
         if bug.assigned_to != user:
             raise PermissionDenied("You can only progress bugs assigned to you.")
-        # Developers can only set: Assigned, In Progress, Resolved
-        if new_status not in [STATUS_IN_PROGRESS, STATUS_RESOLVED]:
+        # Developers can set: Acknowledged, In Progress, Code Review, Ready for Testing
+        if new_status not in [STATUS_ACKNOWLEDGED, STATUS_IN_PROGRESS, STATUS_CODE_REVIEW, STATUS_READY_TESTING]:
             messages.error(request, f"Developers cannot change status to {new_status}.")
             return redirect('bug_detail', pk=pk)
 
     elif role == ROLE_TESTER:
-        # Testers can set: Open, In Progress, Resolved, Testing, Closed, Reopened, Rejected
-        # Standard: Testing, Closed, Reopened, Rejected.
-        if new_status not in [STATUS_CLOSED, STATUS_REOPENED, STATUS_TESTING, STATUS_REJECTED]:
+        # Testers can: set Testing, Passed, Reopened, Rejected
+        if new_status not in [STATUS_TESTING, STATUS_PASSED, STATUS_CLOSED, STATUS_REOPENED, STATUS_REJECTED]:
             messages.error(request, f"Testers cannot change status to {new_status}.")
             return redirect('bug_detail', pk=pk)
 
-    elif role != ROLE_ADMIN:
+    elif role == ROLE_CLIENT:
+        raise PermissionDenied("Clients cannot change bug status.")
+
+    elif role not in ADMIN_ROLES:
         raise PermissionDenied("Access denied.")
 
     # All checks passed, let's change status
@@ -824,7 +842,7 @@ def analytics_view(request):
     dev_performance = []
     for dev in developers:
         assigned = bugs_qs.filter(assigned_to=dev).count()
-        resolved = bugs_qs.filter(assigned_to=dev, status=STATUS_RESOLVED).count()
+        resolved = bugs_qs.filter(assigned_to=dev, status=STATUS_PASSED).count()
         closed = bugs_qs.filter(assigned_to=dev, status=STATUS_CLOSED).count()
         dev_performance.append({
             'username': dev.username,
@@ -1342,3 +1360,280 @@ def ide_api_test(request):
         return JsonResponse({'error': 'Django tests exceeded 25 seconds timeout.'}, status=500)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+# PROJECT/KANBAN/REPORTS/AI placeholder - views appended below
+
+from .ai_engine import full_ai_triage
+
+
+@login_required
+def project_list_view(request):
+    user = request.user
+    role = user.profile.role
+    ADMIN_ROLES = [ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_PM, ROLE_TEAM_LEAD]
+    if role in ADMIN_ROLES:
+        projects = Project.objects.all()
+    else:
+        projects = user.projects.all()
+    return render(request, 'tracker/project_list.html', {
+        'projects': projects,
+        'total_projects': projects.count(),
+        'active_projects': projects.filter(status='Active').count(),
+    })
+
+
+@login_required
+def project_create_view(request):
+    role = request.user.profile.role
+    ADMIN_ROLES = [ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_PM]
+    if role not in ADMIN_ROLES:
+        raise PermissionDenied("Only Project Managers and Admins can create projects.")
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        description = request.POST.get('description', '')
+        repo_url = request.POST.get('repository_url', '')
+        tech_stack = request.POST.get('technology_stack', '')
+        deadline = request.POST.get('deadline') or None
+        member_ids = request.POST.getlist('members')
+        lead_ids = request.POST.getlist('team_leads')
+        if not name:
+            messages.error(request, "Project name is required.")
+            return redirect('project_create')
+        project = Project.objects.create(
+            name=name, description=description, repository_url=repo_url,
+            technology_stack=tech_stack, deadline=deadline, created_by=request.user,
+        )
+        if member_ids:
+            project.members.set(User.objects.filter(pk__in=member_ids))
+        if lead_ids:
+            project.team_leads.set(User.objects.filter(pk__in=lead_ids))
+        log_activity(request.user, "Created Project", details=f"Project: {project.name}")
+        messages.success(request, f"Project '{project.name}' created!")
+        return redirect('project_detail', pk=project.pk)
+    all_users = User.objects.filter(is_active=True)
+    return render(request, 'tracker/project_form.html', {'users': all_users, 'action': 'Create'})
+
+
+@login_required
+def project_detail_view(request, pk):
+    project = get_object_or_404(Project, pk=pk)
+    user = request.user
+    role = user.profile.role
+    ADMIN_ROLES = [ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_PM, ROLE_TEAM_LEAD]
+    if role not in ADMIN_ROLES and user not in project.members.all():
+        raise PermissionDenied("You are not a member of this project.")
+    bugs = project.bugs.all()
+    total = bugs.count()
+    open_count = bugs.filter(status__in=[STATUS_OPEN, STATUS_NEW, STATUS_ASSIGNED]).count()
+    closed_count = bugs.filter(status__in=[STATUS_PASSED, STATUS_CLOSED]).count()
+    release_readiness = round((closed_count / total * 100) if total > 0 else 0, 1)
+    return render(request, 'tracker/project_detail.html', {
+        'project': project,
+        'bugs': bugs[:20],
+        'total_bugs': total,
+        'open_bugs': open_count,
+        'critical_bugs': bugs.filter(priority=PRIORITY_CRITICAL).count(),
+        'closed_bugs': closed_count,
+        'release_readiness': release_readiness,
+        'active_sprints': project.sprints.filter(status='Active'),
+        'upcoming_releases': project.releases.filter(status='Planning'),
+        'modules': project.modules.all(),
+        'members': project.members.all(),
+    })
+
+
+@login_required
+def project_edit_view(request, pk):
+    project = get_object_or_404(Project, pk=pk)
+    role = request.user.profile.role
+    ADMIN_ROLES = [ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_PM]
+    if role not in ADMIN_ROLES:
+        raise PermissionDenied("Only Admins and Project Managers can edit projects.")
+    if request.method == 'POST':
+        project.name = request.POST.get('name', project.name).strip()
+        project.description = request.POST.get('description', project.description)
+        project.repository_url = request.POST.get('repository_url', project.repository_url)
+        project.technology_stack = request.POST.get('technology_stack', project.technology_stack)
+        project.deadline = request.POST.get('deadline') or None
+        project.status = request.POST.get('status', project.status)
+        project.save()
+        member_ids = request.POST.getlist('members')
+        lead_ids = request.POST.getlist('team_leads')
+        if member_ids:
+            project.members.set(User.objects.filter(pk__in=member_ids))
+        if lead_ids:
+            project.team_leads.set(User.objects.filter(pk__in=lead_ids))
+        log_activity(request.user, "Updated Project", details=f"Project: {project.name}")
+        messages.success(request, f"Project '{project.name}' updated!")
+        return redirect('project_detail', pk=project.pk)
+    all_users = User.objects.filter(is_active=True)
+    return render(request, 'tracker/project_form.html', {'project': project, 'users': all_users, 'action': 'Edit'})
+
+
+@login_required
+def sprint_create_view(request, pk):
+    project = get_object_or_404(Project, pk=pk)
+    role = request.user.profile.role
+    ADMIN_ROLES = [ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_PM, ROLE_TEAM_LEAD]
+    if role not in ADMIN_ROLES:
+        raise PermissionDenied("Only Managers can create sprints.")
+    if request.method == 'POST':
+        sprint = Sprint.objects.create(
+            project=project,
+            name=request.POST.get('name', '').strip(),
+            start_date=request.POST.get('start_date'),
+            end_date=request.POST.get('end_date'),
+            status=request.POST.get('status', 'Planning'),
+        )
+        log_activity(request.user, "Created Sprint", details=f"Sprint '{sprint.name}' on {project.name}")
+        messages.success(request, f"Sprint '{sprint.name}' created!")
+        return redirect('project_detail', pk=project.pk)
+    return render(request, 'tracker/sprint_form.html', {'project': project})
+
+
+@login_required
+def release_create_view(request, pk):
+    project = get_object_or_404(Project, pk=pk)
+    role = request.user.profile.role
+    ADMIN_ROLES = [ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_PM]
+    if role not in ADMIN_ROLES:
+        raise PermissionDenied("Only Managers can create releases.")
+    if request.method == 'POST':
+        release = Release.objects.create(
+            project=project,
+            version_name=request.POST.get('version_name', '').strip(),
+            release_date=request.POST.get('release_date') or None,
+        )
+        log_activity(request.user, "Created Release", details=f"Release '{release.version_name}' on {project.name}")
+        messages.success(request, f"Release '{release.version_name}' created!")
+        return redirect('project_detail', pk=project.pk)
+    return render(request, 'tracker/release_form.html', {'project': project})
+
+
+@login_required
+def kanban_view(request):
+    user = request.user
+    role = user.profile.role
+    ADMIN_ROLES = [ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_PM, ROLE_TEAM_LEAD]
+    if role in ADMIN_ROLES:
+        bugs_qs = Bug.objects.select_related('assigned_to', 'project')
+    elif role == ROLE_DEVELOPER:
+        bugs_qs = Bug.objects.filter(assigned_to=user).select_related('assigned_to', 'project')
+    elif role == ROLE_TESTER:
+        bugs_qs = Bug.objects.filter(tester=user).select_related('assigned_to', 'project')
+    else:
+        bugs_qs = Bug.objects.none()
+
+    project_id = request.GET.get('project')
+    if project_id:
+        bugs_qs = bugs_qs.filter(project_id=project_id)
+
+    columns = [STATUS_NEW, STATUS_ASSIGNED, STATUS_ACKNOWLEDGED, STATUS_IN_PROGRESS,
+               STATUS_CODE_REVIEW, STATUS_READY_TESTING, STATUS_TESTING, STATUS_PASSED, STATUS_CLOSED]
+    kanban_data = {col: list(bugs_qs.filter(status=col)) for col in columns}
+
+    return render(request, 'tracker/kanban.html', {
+        'kanban_data': kanban_data,
+        'columns': columns,
+        'projects': Project.objects.all(),
+        'selected_project': project_id,
+    })
+
+
+@login_required
+def kanban_move_view(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    import json as _json
+    data = _json.loads(request.body)
+    bug = get_object_or_404(Bug, pk=data.get('bug_id'))
+    new_status = data.get('new_status')
+    user = request.user
+    role = user.profile.role
+    if role == ROLE_CLIENT:
+        return JsonResponse({'error': 'Clients cannot move bugs.'}, status=403)
+    if role == ROLE_DEVELOPER and bug.assigned_to != user:
+        return JsonResponse({'error': 'Not your bug.'}, status=403)
+    if role == ROLE_TESTER and bug.tester != user:
+        return JsonResponse({'error': 'Not assigned to you for testing.'}, status=403)
+    old_status = bug.status
+    bug.status = new_status
+    bug.save()
+    log_activity(user, "Status Changed via Kanban", bug=bug, details=f"{old_status} -> {new_status}")
+    if bug.assigned_to and bug.assigned_to != user:
+        create_notification(bug.assigned_to, user, f"Bug '{bug.title}' moved to '{new_status}'", bug=bug)
+    return JsonResponse({'success': True, 'new_status': new_status})
+
+
+@login_required
+def reports_view(request):
+    user = request.user
+    role = user.profile.role
+    ADMIN_ROLES = [ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_PM, ROLE_TEAM_LEAD]
+    bugs_qs = Bug.objects.all() if role in ADMIN_ROLES else Bug.objects.filter(
+        Q(assigned_to=user) | Q(created_by=user))
+    by_status = {s: bugs_qs.filter(status=s).count() for s, _ in STATUS_CHOICES}
+    by_priority = {p: bugs_qs.filter(priority=p).count() for p, _ in PRIORITY_CHOICES}
+    by_severity = {s: bugs_qs.filter(severity=s).count() for s, _ in SEVERITY_CHOICES}
+    developers = User.objects.filter(profile__role=ROLE_DEVELOPER, is_active=True)
+    dev_stats = [{
+        'name': d.get_full_name() or d.username,
+        'assigned': bugs_qs.filter(assigned_to=d).count(),
+        'fixed': bugs_qs.filter(assigned_to=d, status=STATUS_PASSED).count(),
+        'closed': bugs_qs.filter(assigned_to=d, status=STATUS_CLOSED).count(),
+        'reopened': bugs_qs.filter(assigned_to=d, status=STATUS_REOPENED).count(),
+    } for d in developers]
+    testers = User.objects.filter(profile__role=ROLE_TESTER, is_active=True)
+    tester_stats = [{
+        'name': t.get_full_name() or t.username,
+        'reported': bugs_qs.filter(created_by=t).count(),
+        'verified': bugs_qs.filter(tester=t, status=STATUS_PASSED).count(),
+        'failed': bugs_qs.filter(tester=t, status=STATUS_REOPENED).count(),
+    } for t in testers]
+    return render(request, 'tracker/reports.html', {
+        'total': bugs_qs.count(),
+        'by_status': by_status,
+        'by_priority': by_priority,
+        'by_severity': by_severity,
+        'dev_stats': dev_stats,
+        'tester_stats': tester_stats,
+        'bugs': bugs_qs[:50],
+    })
+
+
+@login_required
+def ai_triage_view(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    import json as _json
+    try:
+        data = _json.loads(request.body)
+    except Exception:
+        data = request.POST.dict()
+    existing_bugs = list(Bug.objects.all()[:200])
+    developers = list(User.objects.filter(profile__role=ROLE_DEVELOPER, is_active=True
+                                          ).prefetch_related('assigned_bugs', 'activity_logs'))
+    result = full_ai_triage(
+        title=data.get('title', ''),
+        description=data.get('description', ''),
+        bug_type=data.get('bug_type', 'Functional Bug'),
+        environment=data.get('environment', 'Development'),
+        steps=data.get('steps_to_reproduce', ''),
+        expected=data.get('expected_result', ''),
+        actual=data.get('actual_result', ''),
+        existing_bugs=existing_bugs,
+        developers=developers,
+    )
+    result['recommended_developers'] = [{
+        'username': r['user'].username,
+        'name': r['user'].get_full_name() or r['user'].username,
+        'open_bugs': r['open_bugs'],
+        'score': r['score'],
+    } for r in result.get('recommended_developers', [])]
+    result['duplicates'] = [{
+        'bug_id': d['bug'].bug_id or str(d['bug'].pk),
+        'title': d['bug'].title,
+        'status': d['bug'].status,
+        'score': d['score'],
+    } for d in result.get('duplicates', [])]
+    return JsonResponse(result)

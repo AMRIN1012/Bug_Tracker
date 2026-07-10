@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }}{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="d-flex align-items-start justify-content-between mb-4 flex-wrap gap-3">
+  <div>
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-1">
+        <li class="breadcrumb-item"><a href="{% url 'project_list' %}">Projects</a></li>
+        <li class="breadcrumb-item active">{{ project.name }}</li>
+      </ol>
+    </nav>
+    <h1 class="h2 fw-bold mb-1">{{ project.name }}</h1>
+    <div class="d-flex gap-2 flex-wrap align-items-center">
+      <span class="badge rounded-pill px-3 py-2
+        {% if project.status == 'Active' %}bg-success
+        {% elif project.status == 'Completed' %}bg-primary
+        {% elif project.status == 'On Hold' %}bg-warning text-dark
+        {% else %}bg-secondary{% endif %}">
+        {{ project.status }}
+      </span>
+      {% if project.technology_stack %}
+      <span class="badge bg-dark">{{ project.technology_stack }}</span>
+      {% endif %}
+      {% if project.deadline %}
+      <span class="text-muted small"><i class="bi bi-calendar-event me-1"></i>Deadline: {{ project.deadline|date:"M d, Y" }}</span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'kanban' %}?project={{ project.pk }}" class="btn btn-outline-info">
+      <i class="bi bi-columns-gap me-1"></i>Kanban
+    </a>
+    {% if global_user_role == 'Admin' or global_user_role == 'Super Admin' or global_user_role == 'Project Manager' %}
+    <a href="{% url 'sprint_create' project.pk %}" class="btn btn-outline-primary">
+      <i class="bi bi-lightning me-1"></i>New Sprint
+    </a>
+    <a href="{% url 'release_create' project.pk %}" class="btn btn-outline-success">
+      <i class="bi bi-tag me-1"></i>New Release
+    </a>
+    <a href="{% url 'project_edit' project.pk %}" class="btn btn-primary">
+      <i class="bi bi-pencil me-1"></i>Edit
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Project description -->
+{% if project.description %}
+<div class="card border-0 shadow-sm mb-4" style="border-radius:12px;">
+  <div class="card-body">
+    <p class="text-muted mb-0">{{ project.description }}</p>
+    {% if project.repository_url %}
+    <div class="mt-2">
+      <a href="{{ project.repository_url }}" target="_blank" class="text-primary small">
+        <i class="bi bi-github me-1"></i>{{ project.repository_url }}
+      </a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Stats Row -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)"><i class="bi bi-bug"></i></div>
+      <div class="stat-info"><div class="stat-number">{{ total_bugs }}</div><div class="stat-label">Total Bugs</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:linear-gradient(135deg,#ef4444,#dc2626)"><i class="bi bi-exclamation-circle"></i></div>
+      <div class="stat-info"><div class="stat-number">{{ open_bugs }}</div><div class="stat-label">Open Bugs</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:linear-gradient(135deg,#f59e0b,#d97706)"><i class="bi bi-fire"></i></div>
+      <div class="stat-info"><div class="stat-number">{{ critical_bugs }}</div><div class="stat-label">Critical</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:linear-gradient(135deg,#10b981,#059669)"><i class="bi bi-check2-circle"></i></div>
+      <div class="stat-info"><div class="stat-number">{{ release_readiness }}%</div><div class="stat-label">Release Ready</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Release Readiness Progress -->
+<div class="card border-0 shadow-sm mb-4" style="border-radius:12px;">
+  <div class="card-body">
+    <div class="d-flex justify-content-between mb-2">
+      <span class="fw-semibold">Release Readiness</span>
+      <span class="text-muted">{{ closed_bugs }}/{{ total_bugs }} resolved</span>
+    </div>
+    <div class="progress" style="height:10px;border-radius:6px;">
+      <div class="progress-bar bg-success" style="width:{{ release_readiness }}%;border-radius:6px;"></div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- Left Column: Bugs, Sprints, Releases -->
+  <div class="col-lg-8">
+
+    <!-- Active Sprints -->
+    {% if active_sprints %}
+    <div class="card border-0 shadow-sm mb-4" style="border-radius:12px;">
+      <div class="card-header border-0 py-3 px-4">
+        <h6 class="fw-bold mb-0"><i class="bi bi-lightning-fill text-warning me-2"></i>Active Sprints</h6>
+      </div>
+      <div class="card-body px-4 py-0">
+        {% for sprint in active_sprints %}
+        <div class="d-flex align-items-center justify-content-between py-3 border-bottom">
+          <div>
+            <span class="fw-semibold">{{ sprint.name }}</span>
+            <div class="text-muted small">{{ sprint.start_date|date:"M d" }} — {{ sprint.end_date|date:"M d, Y" }}</div>
+          </div>
+          <span class="badge bg-success">{{ sprint.status }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Upcoming Releases -->
+    {% if upcoming_releases %}
+    <div class="card border-0 shadow-sm mb-4" style="border-radius:12px;">
+      <div class="card-header border-0 py-3 px-4">
+        <h6 class="fw-bold mb-0"><i class="bi bi-tag-fill text-primary me-2"></i>Upcoming Releases</h6>
+      </div>
+      <div class="card-body px-4 py-0">
+        {% for release in upcoming_releases %}
+        <div class="d-flex align-items-center justify-content-between py-3 border-bottom">
+          <div>
+            <span class="fw-semibold">{{ release.version_name }}</span>
+            <div class="text-muted small">
+              {% if release.release_date %}Due {{ release.release_date|date:"M d, Y" }}{% else %}Date TBD{% endif %}
+            </div>
+          </div>
+          <span class="badge bg-info text-dark">{{ release.status }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Recent Bugs -->
+    <div class="card border-0 shadow-sm" style="border-radius:12px;">
+      <div class="card-header border-0 py-3 px-4 d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold mb-0"><i class="bi bi-bug-fill text-danger me-2"></i>Recent Bugs</h6>
+        <a href="{% url 'bug_create' %}?project={{ project.pk }}" class="btn btn-sm btn-outline-danger">
+          <i class="bi bi-plus me-1"></i>Log Bug
+        </a>
+      </div>
+      <div class="card-body p-0">
+        {% if bugs %}
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead class="table-dark">
+              <tr>
+                <th class="ps-4">Bug ID</th>
+                <th>Title</th>
+                <th>Priority</th>
+                <th>Status</th>
+                <th>Assigned</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for bug in bugs %}
+              <tr>
+                <td class="ps-4"><a href="{% url 'bug_detail' bug.pk %}" class="text-primary fw-mono">{{ bug.bug_id|default:bug.pk }}</a></td>
+                <td>{{ bug.title|truncatechars:45 }}</td>
+                <td>
+                  <span class="badge
+                    {% if bug.priority == 'Critical' %}bg-danger
+                    {% elif bug.priority == 'High' %}bg-warning text-dark
+                    {% elif bug.priority == 'Medium' %}bg-info text-dark
+                    {% else %}bg-secondary{% endif %}">
+                    {{ bug.priority }}
+                  </span>
+                </td>
+                <td><span class="badge bg-light text-dark border">{{ bug.status }}</span></td>
+                <td>{{ bug.assigned_to.username|default:"—" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center py-4 text-muted">
+          <i class="bi bi-check-circle" style="font-size:2rem;opacity:0.4;"></i>
+          <p class="mt-2 mb-0">No bugs logged for this project yet.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Column: Members & Modules -->
+  <div class="col-lg-4">
+
+    <!-- Team Members -->
+    <div class="card border-0 shadow-sm mb-4" style="border-radius:12px;">
+      <div class="card-header border-0 py-3 px-4">
+        <h6 class="fw-bold mb-0"><i class="bi bi-people-fill text-primary me-2"></i>Team Members</h6>
+      </div>
+      <div class="card-body px-4 py-0">
+        {% for member in members %}
+        <div class="d-flex align-items-center gap-3 py-2 border-bottom">
+          <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center"
+               style="width:38px;height:38px;font-size:0.8rem;font-weight:700;flex-shrink:0;">
+            {{ member.username|slice:":2"|upper }}
+          </div>
+          <div>
+            <div class="fw-semibold">{{ member.get_full_name|default:member.username }}</div>
+            <small class="text-muted">{{ member.profile.role }}</small>
+          </div>
+        </div>
+        {% empty %}
+        <p class="text-muted py-3 mb-0">No members assigned yet.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Modules -->
+    {% if modules %}
+    <div class="card border-0 shadow-sm" style="border-radius:12px;">
+      <div class="card-header border-0 py-3 px-4">
+        <h6 class="fw-bold mb-0"><i class="bi bi-puzzle-fill text-success me-2"></i>Modules</h6>
+      </div>
+      <div class="card-body px-4 py-0">
+        {% for module in modules %}
+        <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+          <span class="fw-semibold">{{ module.name }}</span>
+          <span class="badge bg-light text-dark border">{{ module.bugs.count }} bugs</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

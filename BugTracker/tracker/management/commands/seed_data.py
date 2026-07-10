@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 from tracker.models import (
     UserProfile, Bug, Comment, ActivityLog, AssignmentHistory,
     ROLE_ADMIN, ROLE_DEVELOPER, ROLE_TESTER,
-    STATUS_OPEN, STATUS_ASSIGNED, STATUS_IN_PROGRESS, STATUS_RESOLVED,
+    STATUS_OPEN, STATUS_ASSIGNED, STATUS_IN_PROGRESS, STATUS_PASSED,
     STATUS_TESTING, STATUS_CLOSED, STATUS_REOPENED, STATUS_REJECTED,
     BUG_TYPE_UI, BUG_TYPE_API, BUG_TYPE_SECURITY, BUG_TYPE_PERFORMANCE, BUG_TYPE_DATABASE,
     PRIORITY_LOW, PRIORITY_MEDIUM, PRIORITY_HIGH, PRIORITY_CRITICAL,
@@ -113,7 +113,7 @@ class Command(BaseCommand):
             bug_type=BUG_TYPE_PERFORMANCE,
             priority=PRIORITY_MEDIUM,
             severity=SEVERITY_MAJOR,
-            status=STATUS_RESOLVED,
+            status=STATUS_PASSED,
             created_by=tester_user,
             assigned_to=dev_user
         )

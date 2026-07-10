@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% load tracker_extras %}
+{% block title %}Kanban Board{% endblock %}
+
+{% block extra_css %}
+<style>
+  .kanban-wrapper {
+    display: flex;
+    gap: 14px;
+    overflow-x: auto;
+    padding-bottom: 24px;
+    min-height: calc(100vh - 200px);
+  }
+  .kanban-col {
+    flex: 0 0 240px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.08);
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 200px);
+  }
+  .kanban-col-header {
+    padding: 12px 14px 10px;
+    border-radius: 14px 14px 0 0;
+    font-weight: 700;
+    font-size: 0.8rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .kanban-col-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+    min-height: 80px;
+  }
+  .kanban-col-body::-webkit-scrollbar { width: 4px; }
+  .kanban-col-body::-webkit-scrollbar-track { background: transparent; }
+  .kanban-col-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+
+  .bug-card {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    cursor: grab;
+    transition: all 0.2s ease;
+    font-size: 0.85rem;
+  }
+  .bug-card:hover {
+    background: rgba(255,255,255,0.13);
+    border-color: rgba(99,102,241,0.5);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.25);
+  }
+  .bug-card.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+  }
+  .kanban-col-body.drag-over {
+    background: rgba(99,102,241,0.1);
+    border-radius: 8px;
+    border: 2px dashed rgba(99,102,241,0.5);
+  }
+  .bug-id { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; opacity: 0.7; }
+  .bug-title { font-weight: 600; line-height: 1.3; margin-bottom: 6px; word-break: break-word; }
+  .priority-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 3px;
+  }
+  .p-Critical { background: #ef4444; }
+  .p-High { background: #f59e0b; }
+  .p-Medium { background: #3b82f6; }
+  .p-Low { background: #6b7280; }
+
+  /* Column theme colors */
+  .col-new      { border-top: 3px solid #6366f1; }
+  .col-assigned { border-top: 3px solid #8b5cf6; }
+  .col-ack      { border-top: 3px solid #06b6d4; }
+  .col-progress { border-top: 3px solid #3b82f6; }
+  .col-review   { border-top: 3px solid #f59e0b; }
+  .col-ready    { border-top: 3px solid #10b981; }
+  .col-testing  { border-top: 3px solid #f97316; }
+  .col-passed   { border-top: 3px solid #22c55e; }
+  .col-closed   { border-top: 3px solid #64748b; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+  <div>
+    <h1 class="h2 fw-bold mb-1"><i class="bi bi-columns-gap me-2 text-primary"></i>Kanban Board</h1>
+    <p class="text-muted mb-0">Drag & drop bugs across workflow stages</p>
+  </div>
+  <div class="d-flex gap-2 align-items-center">
+    <!-- Project filter -->
+    <form method="GET" class="d-flex gap-2">
+      <select name="project" class="form-select form-select-sm" onchange="this.form.submit()" style="width:200px;">
+        <option value="">All Projects</option>
+        {% for p in projects %}
+        <option value="{{ p.pk }}" {% if selected_project == p.pk|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    <a href="{% url 'bug_create' %}" class="btn btn-primary btn-sm px-3">
+      <i class="bi bi-plus-circle me-1"></i>Log Bug
+    </a>
+  </div>
+</div>
+
+<!-- Kanban Board -->
+<div class="kanban-wrapper" id="kanbanWrapper">
+  {% for col in columns %}
+  {% with col_bugs=kanban_data|get_item:col %}
+  <div class="kanban-col {% if col == 'New' %}col-new
+              {% elif col == 'Assigned' %}col-assigned
+              {% elif col == 'Acknowledged' %}col-ack
+              {% elif col == 'In Progress' %}col-progress
+              {% elif col == 'Code Review' %}col-review
+              {% elif col == 'Ready for Testing' %}col-ready
+              {% elif col == 'Testing' %}col-testing
+              {% elif col == 'Passed' %}col-passed
+              {% else %}col-closed{% endif %}">
+    <div class="kanban-col-header">
+      <span>{{ col }}</span>
+      <span class="badge rounded-pill bg-dark text-white">{{ col_bugs|length }}</span>
+    </div>
+    <div class="kanban-col-body" data-status="{{ col }}" ondragover="onDragOver(event)" ondrop="onDrop(event)" ondragleave="onDragLeave(event)">
+      {% for bug in col_bugs %}
+      <div class="bug-card"
+           draggable="true"
+           data-bug-id="{{ bug.pk }}"
+           data-priority="{{ bug.priority }}"
+           ondragstart="onDragStart(event)"
+           ondragend="onDragEnd(event)">
+        <div class="d-flex justify-content-between align-items-start gap-1 mb-1">
+          <div class="bug-id">{{ bug.bug_id|default:"#"|add:bug.pk|stringformat:"s" }}</div>
+          <div class="priority-dot p-{{ bug.priority }}" title="{{ bug.priority }} Priority"></div>
+        </div>
+        <div class="bug-title">
+          <a href="{% url 'bug_detail' bug.pk %}" class="text-white text-decoration-none">{{ bug.title|truncatechars:60 }}</a>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mt-2">
+          <span class="badge bg-dark text-secondary" style="font-size:0.65rem;">
+            {% if bug.assigned_to %}{{ bug.assigned_to.username }}{% else %}Unassigned{% endif %}
+          </span>
+          <span class="badge
+            {% if bug.priority == 'Critical' %}bg-danger
+            {% elif bug.priority == 'High' %}bg-warning text-dark
+            {% elif bug.priority == 'Medium' %}bg-info text-dark
+            {% else %}bg-secondary{% endif %}" style="font-size:0.65rem;">
+            {{ bug.priority }}
+          </span>
+        </div>
+      </div>
+      {% empty %}
+      <div class="text-center py-4" style="opacity:0.3;">
+        <i class="bi bi-inbox" style="font-size:1.5rem;"></i>
+        <div style="font-size:0.7rem;margin-top:4px;">Empty</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endwith %}
+  {% endfor %}
+</div>
+
+<!-- Toast notification -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index:9999;">
+  <div id="kanbanToast" class="toast align-items-center text-white border-0" role="alert">
+    <div class="d-flex">
+      <div class="toast-body fw-semibold" id="kanbanToastMsg">Bug moved!</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const CSRF = '{{ csrf_token }}';
+  const MOVE_URL = '{% url "kanban_move" %}';
+  let draggedCard = null;
+
+  function onDragStart(e) {
+    draggedCard = e.currentTarget;
+    draggedCard.classList.add('dragging');
+    e.dataTransfer.setData('text/plain', draggedCard.dataset.bugId);
+  }
+
+  function onDragEnd(e) {
+    if (draggedCard) draggedCard.classList.remove('dragging');
+    document.querySelectorAll('.kanban-col-body').forEach(c => c.classList.remove('drag-over'));
+    draggedCard = null;
+  }
+
+  function onDragOver(e) {
+    e.preventDefault();
+    e.currentTarget.classList.add('drag-over');
+  }
+
+  function onDragLeave(e) {
+    e.currentTarget.classList.remove('drag-over');
+  }
+
+  function onDrop(e) {
+    e.preventDefault();
+    const col = e.currentTarget;
+    col.classList.remove('drag-over');
+    const bugId = e.dataTransfer.getData('text/plain');
+    const newStatus = col.dataset.status;
+
+    if (!draggedCard || draggedCard.closest('[data-status]').dataset.status === newStatus) return;
+
+    // Optimistically move card
+    col.insertBefore(draggedCard, col.querySelector('.bug-card:last-child') ? null : col.firstChild);
+
+    // Remove empty placeholder if present
+    const placeholder = col.querySelector('.text-center.py-4');
+    if (placeholder) placeholder.remove();
+
+    // API call
+    fetch(MOVE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ bug_id: parseInt(bugId), new_status: newStatus })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        showToast(`✅ Bug moved to "${newStatus}"`, 'bg-success');
+      } else {
+        showToast(`⚠️ ${data.error || 'Move failed'}`, 'bg-danger');
+      }
+    })
+    .catch(() => showToast('⚠️ Network error. Move may not have saved.', 'bg-danger'));
+  }
+
+  function showToast(msg, bgClass) {
+    const toast = document.getElementById('kanbanToast');
+    const msgEl = document.getElementById('kanbanToastMsg');
+    toast.className = `toast align-items-center text-white border-0 ${bgClass}`;
+    msgEl.textContent = msg;
+    new bootstrap.Toast(toast, { delay: 3000 }).show();
+  }
+</script>
+{% endblock %}

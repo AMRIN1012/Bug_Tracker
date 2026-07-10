@@ -45,6 +45,22 @@ urlpatterns = [
 
     # Analytics / Reports
     path('analytics/', views.analytics_view, name='analytics'),
+    path('reports/', views.reports_view, name='reports'),
+
+    # --- Project Management ---
+    path('projects/', views.project_list_view, name='project_list'),
+    path('projects/create/', views.project_create_view, name='project_create'),
+    path('projects/<int:pk>/', views.project_detail_view, name='project_detail'),
+    path('projects/<int:pk>/edit/', views.project_edit_view, name='project_edit'),
+    path('projects/<int:pk>/sprints/create/', views.sprint_create_view, name='sprint_create'),
+    path('projects/<int:pk>/releases/create/', views.release_create_view, name='release_create'),
+
+    # Kanban Board
+    path('kanban/', views.kanban_view, name='kanban'),
+    path('kanban/move/', views.kanban_move_view, name='kanban_move'),
+
+    # AI Bug Triage API
+    path('ai/triage/', views.ai_triage_view, name='ai_triage'),
 
     # Developer Issues
     path('dev-issues/', views.dev_issue_list_view, name='dev_issue_list'),

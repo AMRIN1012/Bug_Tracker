@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% load tracker_extras %}
+{% block title %}Reports{% endblock %}
+
+{% block extra_css %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h1 class="h2 fw-bold mb-1"><i class="bi bi-file-earmark-bar-graph me-2 text-primary"></i>Reports Center</h1>
+    <p class="text-muted mb-0">Comprehensive bug tracking analytics and team performance</p>
+  </div>
+  <div class="d-flex gap-2">
+    <button class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+      <i class="bi bi-printer me-1"></i>Print
+    </button>
+  </div>
+</div>
+
+<!-- Summary Stats Row -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)"><i class="bi bi-bug"></i></div>
+      <div class="stat-info"><div class="stat-number">{{ total }}</div><div class="stat-label">Total Bugs</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:linear-gradient(135deg,#ef4444,#dc2626)"><i class="bi bi-exclamation-triangle"></i></div>
+      <div class="stat-info"><div class="stat-number">{{ by_priority.Critical|default:0 }}</div><div class="stat-label">Critical Priority</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:linear-gradient(135deg,#10b981,#059669)"><i class="bi bi-check-circle"></i></div>
+      <div class="stat-info"><div class="stat-number">{{ by_status.Passed|default:0 }}</div><div class="stat-label">Passed / Fixed</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:linear-gradient(135deg,#f59e0b,#d97706)"><i class="bi bi-arrow-counterclockwise"></i></div>
+      <div class="stat-info"><div class="stat-number">{{ by_status.Reopened|default:0 }}</div><div class="stat-label">Reopened</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row g-4 mb-4">
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm h-100" style="border-radius:14px;">
+      <div class="card-header border-0 py-3 px-4">
+        <h6 class="fw-bold mb-0">Bugs by Status</h6>
+      </div>
+      <div class="card-body d-flex align-items-center justify-content-center">
+        <canvas id="statusChart" style="max-height:220px;"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm h-100" style="border-radius:14px;">
+      <div class="card-header border-0 py-3 px-4">
+        <h6 class="fw-bold mb-0">Bugs by Priority</h6>
+      </div>
+      <div class="card-body d-flex align-items-center justify-content-center">
+        <canvas id="priorityChart" style="max-height:220px;"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm h-100" style="border-radius:14px;">
+      <div class="card-header border-0 py-3 px-4">
+        <h6 class="fw-bold mb-0">Bugs by Severity</h6>
+      </div>
+      <div class="card-body d-flex align-items-center justify-content-center">
+        <canvas id="severityChart" style="max-height:220px;"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Developer Performance Table -->
+{% if dev_stats %}
+<div class="card border-0 shadow-sm mb-4" style="border-radius:14px;">
+  <div class="card-header border-0 py-3 px-4">
+    <h6 class="fw-bold mb-0"><i class="bi bi-person-gear me-2 text-primary"></i>Developer Performance</h6>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th class="ps-4">Developer</th>
+            <th class="text-center">Assigned</th>
+            <th class="text-center">Fixed</th>
+            <th class="text-center">Closed</th>
+            <th class="text-center">Reopened</th>
+            <th class="text-center">Fix Rate</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for dev in dev_stats %}
+          <tr>
+            <td class="ps-4 fw-semibold">{{ dev.name }}</td>
+            <td class="text-center">{{ dev.assigned }}</td>
+            <td class="text-center"><span class="text-success fw-bold">{{ dev.fixed }}</span></td>
+            <td class="text-center"><span class="text-primary fw-bold">{{ dev.closed }}</span></td>
+            <td class="text-center"><span class="text-warning fw-bold">{{ dev.reopened }}</span></td>
+            <td class="text-center">
+              {% if dev.assigned > 0 %}
+              {% with rate=dev.fixed|percentage:dev.assigned %}
+              <div class="progress" style="height:8px;width:80px;margin:auto;border-radius:4px;">
+                <div class="progress-bar bg-success" style="width:{{ rate }}%"></div>
+              </div>
+              <small class="text-muted">{{ rate }}%</small>
+              {% endwith %}
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Tester Performance Table -->
+{% if tester_stats %}
+<div class="card border-0 shadow-sm mb-4" style="border-radius:14px;">
+  <div class="card-header border-0 py-3 px-4">
+    <h6 class="fw-bold mb-0"><i class="bi bi-person-check me-2 text-success"></i>Tester / QA Performance</h6>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th class="ps-4">Tester</th>
+            <th class="text-center">Bugs Reported</th>
+            <th class="text-center">Verified / Passed</th>
+            <th class="text-center">Failed / Reopened</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in tester_stats %}
+          <tr>
+            <td class="ps-4 fw-semibold">{{ t.name }}</td>
+            <td class="text-center">{{ t.reported }}</td>
+            <td class="text-center"><span class="text-success fw-bold">{{ t.verified }}</span></td>
+            <td class="text-center"><span class="text-danger fw-bold">{{ t.failed }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Full Bug List -->
+<div class="card border-0 shadow-sm" style="border-radius:14px;">
+  <div class="card-header border-0 py-3 px-4 d-flex justify-content-between align-items-center">
+    <h6 class="fw-bold mb-0"><i class="bi bi-list-task me-2"></i>Bug Export List (top 50)</h6>
+    <a href="{% url 'bug_list' %}" class="btn btn-sm btn-outline-primary">View All</a>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover table-sm mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th class="ps-4">ID</th>
+            <th>Title</th>
+            <th>Priority</th>
+            <th>Severity</th>
+            <th>Status</th>
+            <th>Assigned</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for bug in bugs %}
+          <tr>
+            <td class="ps-4"><a href="{% url 'bug_detail' bug.pk %}" class="text-primary fw-mono">{{ bug.bug_id|default:bug.pk }}</a></td>
+            <td>{{ bug.title|truncatechars:45 }}</td>
+            <td>
+              <span class="badge
+                {% if bug.priority == 'Critical' %}bg-danger
+                {% elif bug.priority == 'High' %}bg-warning text-dark
+                {% elif bug.priority == 'Medium' %}bg-info text-dark
+                {% else %}bg-secondary{% endif %}">
+                {{ bug.priority }}
+              </span>
+            </td>
+            <td><span class="badge bg-light text-dark border">{{ bug.severity }}</span></td>
+            <td><span class="badge bg-light text-dark border">{{ bug.status }}</span></td>
+            <td>{{ bug.assigned_to.username|default:"—" }}</td>
+            <td class="text-muted small">{{ bug.created_at|date:"M d, Y" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" class="text-center py-4 text-muted">No bugs found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+// Render charts using pre-serialized data
+const chartDefaults = {
+  plugins: { legend: { labels: { color: '#cbd5e1', font: { size: 12 } } } },
+  maintainAspectRatio: true,
+};
+const COLORS = ['#6366f1','#8b5cf6','#06b6d4','#3b82f6','#f59e0b','#10b981','#f97316','#22c55e','#64748b','#ef4444','#e11d48'];
+
+// Status chart
+const statusData = {
+  labels: [{% for s, c in by_status.items %}"{{ s }}",{% endfor %}],
+  values: [{% for s, c in by_status.items %}{{ c }},{% endfor %}],
+};
+new Chart(document.getElementById('statusChart'), {
+  type: 'doughnut',
+  data: {
+    labels: statusData.labels,
+    datasets: [{ data: statusData.values, backgroundColor: COLORS, borderWidth: 0 }]
+  },
+  options: { ...chartDefaults, cutout: '65%' }
+});
+
+// Priority chart
+const priData = {
+  labels: [{% for p, c in by_priority.items %}"{{ p }}",{% endfor %}],
+  values: [{% for p, c in by_priority.items %}{{ c }},{% endfor %}],
+};
+new Chart(document.getElementById('priorityChart'), {
+  type: 'bar',
+  data: {
+    labels: priData.labels,
+    datasets: [{ label: 'Bugs', data: priData.values,
+      backgroundColor: ['#ef4444','#f59e0b','#3b82f6','#64748b'],
+      borderRadius: 6, borderWidth: 0 }]
+  },
+  options: {
+    ...chartDefaults,
+    scales: {
+      x: { ticks: { color: '#94a3b8' }, grid: { display: false } },
+      y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+    }
+  }
+});
+
+// Severity chart
+const sevData = {
+  labels: [{% for s, c in by_severity.items %}"{{ s }}",{% endfor %}],
+  values: [{% for s, c in by_severity.items %}{{ c }},{% endfor %}],
+};
+new Chart(document.getElementById('severityChart'), {
+  type: 'polarArea',
+  data: {
+    labels: sevData.labels,
+    datasets: [{ data: sevData.values, backgroundColor: COLORS.slice(0,4).map(c => c + 'cc'), borderWidth: 0 }]
+  },
+  options: { ...chartDefaults }
+});
+</script>
+{% endblock %}

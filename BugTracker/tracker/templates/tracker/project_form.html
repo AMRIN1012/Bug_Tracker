@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% load tracker_extras %}
+{% block title %}{{ action }} Project{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <a href="{% url 'project_list' %}" class="btn btn-sm btn-outline-secondary me-3">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+  <h1 class="h3 fw-bold mb-0">{{ action }} Project</h1>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm" style="border-radius:16px;">
+      <div class="card-body p-4">
+        <form method="POST">
+          {% csrf_token %}
+
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label fw-semibold">Project Name <span class="text-danger">*</span></label>
+              <input type="text" name="name" class="form-control form-control-lg"
+                     value="{{ project.name|default:'' }}" placeholder="e.g. Customer Portal v2.0" required>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label fw-semibold">Description</label>
+              <textarea name="description" class="form-control" rows="3"
+                        placeholder="Describe the project goals and scope...">{{ project.description|default:'' }}</textarea>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Technology Stack</label>
+              <input type="text" name="technology_stack" class="form-control"
+                     value="{{ project.technology_stack|default:'' }}"
+                     placeholder="e.g. Django, React, PostgreSQL">
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Repository URL</label>
+              <input type="url" name="repository_url" class="form-control"
+                     value="{{ project.repository_url|default:'' }}"
+                     placeholder="https://github.com/org/repo">
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Deadline</label>
+              <input type="date" name="deadline" class="form-control"
+                     value="{{ project.deadline|date:'Y-m-d'|default:'' }}">
+            </div>
+
+            {% if action == 'Edit' %}
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Status</label>
+              <select name="status" class="form-select">
+                <option value="Active" {% if project.status == 'Active' %}selected{% endif %}>Active</option>
+                <option value="On Hold" {% if project.status == 'On Hold' %}selected{% endif %}>On Hold</option>
+                <option value="Completed" {% if project.status == 'Completed' %}selected{% endif %}>Completed</option>
+                <option value="Archived" {% if project.status == 'Archived' %}selected{% endif %}>Archived</option>
+              </select>
+            </div>
+            {% endif %}
+
+            <div class="col-12">
+              <label class="form-label fw-semibold">Team Members</label>
+              <select name="members" class="form-select" multiple style="height:140px;">
+                {% for u in users %}
+                <option value="{{ u.pk }}"
+                  {% if project and u in project.members.all %}selected{% endif %}>
+                  {{ u.get_full_name|default:u.username }} ({{ u.profile.role }})
+                </option>
+                {% endfor %}
+              </select>
+              <div class="form-text">Hold Ctrl / Cmd to select multiple members</div>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label fw-semibold">Team Leads</label>
+              <select name="team_leads" class="form-select" multiple style="height:100px;">
+                {% for u in users %}
+                <option value="{{ u.pk }}"
+                  {% if project and u in project.team_leads.all %}selected{% endif %}>
+                  {{ u.get_full_name|default:u.username }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="d-flex gap-3 mt-4">
+            <button type="submit" class="btn btn-primary px-4">
+              <i class="bi bi-check-circle me-2"></i>{{ action }} Project
+            </button>
+            <a href="{% url 'project_list' %}" class="btn btn-outline-secondary px-4">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

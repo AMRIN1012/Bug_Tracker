@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Projects{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h1 class="h2 fw-bold mb-1"><i class="bi bi-folder2-open me-2 text-primary"></i>Projects</h1>
+    <p class="text-muted mb-0">Manage all your software projects in one place</p>
+  </div>
+  {% if global_user_role == 'Admin' or global_user_role == 'Super Admin' or global_user_role == 'Project Manager' %}
+  <a href="{% url 'project_create' %}" class="btn btn-primary px-4">
+    <i class="bi bi-plus-circle me-2"></i>New Project
+  </a>
+  {% endif %}
+</div>
+
+<!-- Stats Row -->
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)"><i class="bi bi-folder2"></i></div>
+      <div class="stat-info"><div class="stat-number">{{ total_projects }}</div><div class="stat-label">Total Projects</div></div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:linear-gradient(135deg,#10b981,#059669)"><i class="bi bi-check-circle"></i></div>
+      <div class="stat-info"><div class="stat-number">{{ active_projects }}</div><div class="stat-label">Active Projects</div></div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:linear-gradient(135deg,#f59e0b,#d97706)"><i class="bi bi-archive"></i></div>
+      <div class="stat-info"><div class="stat-number">{{ total_projects|add:"-"|add:active_projects }}</div><div class="stat-label">Completed / On Hold</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Project Cards Grid -->
+{% if projects %}
+<div class="row g-4">
+  {% for project in projects %}
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100 border-0 shadow-sm project-card" style="border-radius:16px;overflow:hidden;">
+      <div class="card-header border-0 py-3 px-4" style="background:linear-gradient(135deg,#1e293b,#334155);">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <h5 class="fw-bold text-white mb-1">{{ project.name }}</h5>
+            <small class="text-slate-400">
+              <i class="bi bi-calendar3 me-1"></i>
+              Created {{ project.created_at|date:"M d, Y" }}
+            </small>
+          </div>
+          <span class="badge rounded-pill px-3 py-2
+            {% if project.status == 'Active' %}bg-success
+            {% elif project.status == 'Completed' %}bg-primary
+            {% elif project.status == 'On Hold' %}bg-warning text-dark
+            {% else %}bg-secondary{% endif %}">
+            {{ project.status }}
+          </span>
+        </div>
+      </div>
+      <div class="card-body px-4 py-3">
+        <p class="text-muted small mb-3">{{ project.description|default:"No description provided."|truncatechars:100 }}</p>
+
+        {% if project.technology_stack %}
+        <div class="mb-3">
+          <small class="text-muted"><i class="bi bi-stack me-1"></i>Stack:</small>
+          <span class="badge bg-light text-dark ms-1">{{ project.technology_stack|truncatechars:40 }}</span>
+        </div>
+        {% endif %}
+
+        <!-- Bug count pills -->
+        <div class="d-flex gap-2 mb-3 flex-wrap">
+          <span class="badge bg-danger bg-opacity-15 text-danger">
+            <i class="bi bi-bug me-1"></i>{{ project.bugs.count }} Bugs
+          </span>
+          <span class="badge bg-primary bg-opacity-15 text-primary">
+            <i class="bi bi-people me-1"></i>{{ project.members.count }} Members
+          </span>
+          {% if project.deadline %}
+          <span class="badge bg-warning bg-opacity-15 text-warning">
+            <i class="bi bi-clock me-1"></i>Due {{ project.deadline|date:"M d" }}
+          </span>
+          {% endif %}
+        </div>
+
+        <!-- Member avatars -->
+        <div class="d-flex align-items-center gap-1 mb-2">
+          {% for member in project.members.all|slice:":5" %}
+          <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center"
+               style="width:30px;height:30px;font-size:0.7rem;font-weight:700;"
+               title="{{ member.get_full_name|default:member.username }}">
+            {{ member.username|slice:":2"|upper }}
+          </div>
+          {% endfor %}
+          {% if project.members.count > 5 %}
+          <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center"
+               style="width:30px;height:30px;font-size:0.65rem;">
+            +{{ project.members.count|add:"-5" }}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="card-footer border-0 px-4 py-3 bg-light">
+        <div class="d-flex gap-2">
+          <a href="{% url 'project_detail' project.pk %}" class="btn btn-sm btn-primary flex-fill">
+            <i class="bi bi-eye me-1"></i>View
+          </a>
+          {% if global_user_role == 'Admin' or global_user_role == 'Super Admin' or global_user_role == 'Project Manager' %}
+          <a href="{% url 'project_edit' project.pk %}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-pencil"></i>
+          </a>
+          {% endif %}
+          <a href="{% url 'kanban' %}?project={{ project.pk }}" class="btn btn-sm btn-outline-info">
+            <i class="bi bi-columns-gap"></i>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-5 mt-4">
+  <i class="bi bi-folder2-open" style="font-size:4rem;color:#64748b;opacity:0.4;"></i>
+  <h4 class="mt-3 text-muted">No Projects Yet</h4>
+  <p class="text-muted">Get started by creating your first project.</p>
+  {% if global_user_role == 'Admin' or global_user_role == 'Super Admin' or global_user_role == 'Project Manager' %}
+  <a href="{% url 'project_create' %}" class="btn btn-primary mt-2">
+    <i class="bi bi-plus-circle me-2"></i>Create First Project
+  </a>
+  {% endif %}
+</div>
+{% endif %}
+
+<style>
+.project-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.project-card:hover { transform: translateY(-4px); box-shadow: 0 12px 30px rgba(0,0,0,0.15) !important; }
+</style>
+{% endblock %}

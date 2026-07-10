@@ -1,7 +1,7 @@
 from django.test import TestCase, Client
 from django.contrib.auth.models import User
 from django.urls import reverse
-from .models import UserProfile, Bug, ROLE_ADMIN, ROLE_DEVELOPER, ROLE_TESTER, STATUS_OPEN, STATUS_ASSIGNED, STATUS_IN_PROGRESS, STATUS_RESOLVED
+from .models import UserProfile, Bug, ROLE_ADMIN, ROLE_DEVELOPER, ROLE_TESTER, STATUS_OPEN, STATUS_ASSIGNED, STATUS_IN_PROGRESS, STATUS_PASSED, STATUS_READY_TESTING
 
 class BugTrackerTests(TestCase):
 
@@ -122,8 +122,8 @@ class BugTrackerTests(TestCase):
         self.assertEqual(bug.status, STATUS_IN_PROGRESS)
 
         # Developer resolves the bug
-        response = self.client.post(reverse('bug_status_update', args=[bug.pk]), {'status': STATUS_RESOLVED})
+        response = self.client.post(reverse('bug_status_update', args=[bug.pk]), {'status': STATUS_READY_TESTING})
         self.assertEqual(response.status_code, 302)
         bug.refresh_from_db()
-        self.assertEqual(bug.status, STATUS_RESOLVED)
+        self.assertEqual(bug.status, STATUS_READY_TESTING)
         self.client.logout()
