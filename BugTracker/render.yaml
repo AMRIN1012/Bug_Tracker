@@ -2,6 +2,7 @@ services:
   - type: web
     name: bug-tracker
     runtime: python
+    rootDir: BugTracker
     buildCommand: ./build.sh
     startCommand: gunicorn bugtracker_project.wsgi:application
     envVars:
